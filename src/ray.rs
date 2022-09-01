@@ -1,6 +1,6 @@
-use bevy::{prelude::*, math::Vec3A, render::primitives::Aabb};
+use bevy::{math::Vec3A, prelude::*, render::primitives::Aabb};
 
-#[derive(Resource, Debug, Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Ray {
     origin: Vec3A,
     direction: Vec3A,
@@ -8,18 +8,17 @@ pub struct Ray {
 
 impl Ray {
     pub fn from_screenspace(
-        cursor_pos_screen: Vec2,
+        cursor_screen_pos: Vec2,
         camera: &Camera,
         camera_transform: &GlobalTransform,
     ) -> Option<Self> {
-        let view = camera_transform.compute_matrix();
-
         let (viewport_min, viewport_max) = camera.logical_viewport_rect()?;
         let screen_size = camera.logical_target_size()?;
-        let viewport_size = viewport_max - viewport_min;
         let adj_cursor_pos =
-            cursor_pos_screen - Vec2::new(viewport_min.x, screen_size.y - viewport_max.y);
+            cursor_screen_pos - Vec2::new(viewport_min.x, screen_size.y - viewport_max.y);
 
+        let viewport_size = viewport_max - viewport_min;
+        let view = camera_transform.compute_matrix();
         let projection = camera.projection_matrix();
         let far_ndc = projection.project_point3(Vec3::NEG_Z).z;
         let near_ndc = projection.project_point3(Vec3::Z).z;
@@ -30,7 +29,7 @@ impl Ray {
         let ray_direction = far - near;
         Some(Self {
             origin: near.into(),
-            direction: ray_direction.into(),
+            direction: ray_direction.normalize().into(),
         })
     }
 
@@ -52,7 +51,7 @@ impl Ray {
         let mut hit_near = t_min.x;
         let mut hit_far = t_max.x;
 
-        if hit_near > t_max.y || t_min.y > hit_far {
+        if (hit_near > t_max.y) || (t_min.y > hit_far) {
             return None;
         }
 
@@ -76,4 +75,3 @@ impl Ray {
         Some([hit_near, hit_far])
     }
 }
-

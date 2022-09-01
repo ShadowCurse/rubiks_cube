@@ -1,4 +1,4 @@
-use bevy::{prelude::*, input::mouse::MouseMotion};
+use bevy::{input::mouse::MouseMotion, prelude::*};
 
 pub struct CameraControllerPlugin;
 
