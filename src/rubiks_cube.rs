@@ -91,14 +91,28 @@ fn setup(
 fn sub_cube_selection(
     cursor_ray: Res<CursorRay>,
     sub_cube_materials: Res<SubCubeMaterials>,
-    mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
+    mut query: Query<
+        (
+            Entity,
+            &Aabb,
+            &GlobalTransform,
+            &mut Handle<StandardMaterial>,
+        ),
+        With<SubCube>,
+    >,
     mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
 ) {
+    let mut closest = f32::MAX;
     let mut newly_selected = None;
     for (entity, aabb, transform, _material) in query.iter_mut() {
-        if let Some(_r) = cursor_ray.intersects_aabb(aabb, &transform.compute_matrix()) {
-            newly_selected = Some(entity);
-            break;
+        if let Some([hit_near, _hit_far]) = cursor_ray
+            .0
+            .intersects_aabb(aabb, &transform.compute_matrix())
+        {
+            if hit_near < closest {
+                closest = hit_near;
+                newly_selected = Some(entity);
+            }
         }
     }
     if newly_selected != currently_selected_sub_cube.0 {
