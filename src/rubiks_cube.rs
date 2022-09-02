@@ -29,6 +29,7 @@ struct SubCube(u32);
 
 #[derive(Component, Debug, Clone)]
 struct RubiksCube {
+    side_size: u32,
     cubes: Vec<(u32, Entity)>,
 }
 
@@ -59,6 +60,16 @@ fn setup(
             for x in 0..CUBE_SIDES {
                 for y in 0..CUBE_SIDES {
                     for z in 0..CUBE_SIDES {
+                        // skipping insides
+                        if x > 0
+                            && x < CUBE_SIDES - 1
+                            && y > 0
+                            && y < CUBE_SIDES - 1
+                            && z > 0
+                            && z < CUBE_SIDES - 1
+                        {
+                            continue;
+                        }
                         let index = CUBE_SIDES * CUBE_SIDES * x + CUBE_SIDES * y + z + 1;
                         let entity = builder
                             .spawn_bundle(PbrBundle {
@@ -78,7 +89,10 @@ fn setup(
                 }
             }
         })
-        .insert(RubiksCube { cubes: sub_cubes });
+        .insert(RubiksCube {
+            side_size: CUBE_SIDES,
+            cubes: sub_cubes,
+        });
 
     commands.insert_resource(SubCubeMaterials {
         selected: sub_cube_selected_material,
