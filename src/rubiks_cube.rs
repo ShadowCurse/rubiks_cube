@@ -30,7 +30,6 @@ struct SubCube(u32);
 #[derive(Component, Debug, Clone)]
 struct RubiksCube {
     side_size: u32,
-    cubes: Vec<(u32, Entity)>,
 }
 
 fn setup(
@@ -43,7 +42,6 @@ fn setup(
     }));
     let sub_cube_selected_material = materials.add(Color::GREEN.into());
     let sub_cube_not_selected_material = materials.add(Color::WHITE.into());
-    let mut sub_cubes = Vec::new();
     commands
         .spawn_bundle((
             Transform::default(),
@@ -84,14 +82,12 @@ fn setup(
                             })
                             .insert(SubCube(index))
                             .id();
-                        sub_cubes.push((index, entity));
                     }
                 }
             }
         })
         .insert(RubiksCube {
             side_size: CUBE_SIDES,
-            cubes: sub_cubes,
         });
 
     commands.insert_resource(SubCubeMaterials {
