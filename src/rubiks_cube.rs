@@ -11,15 +11,20 @@ pub struct RubiksCubePlugin;
 impl Plugin for RubiksCubePlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(setup);
-        app.add_system(sub_cube_selection);
+        app.add_system(pointing_at_sub_cube);
+        app.add_system(selecting_sub_cube);
     }
 }
 
 #[derive(Resource, Debug, Default)]
 struct SubCubeMaterials {
     selected: Handle<StandardMaterial>,
+    pointed: Handle<StandardMaterial>,
     not_selected: Handle<StandardMaterial>,
 }
+
+#[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct CurrentlyPointedAtSubCube(Option<Entity>);
 
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct CurrentlySelectedSubCube(Option<Entity>);
@@ -54,7 +59,7 @@ impl RubiksCube {
             .collect()
     }
 
-    /// return vertical cube layer from 0 to side_size
+    /// returns vertical cube layer from 0 to side_size
     fn vertical_layer(&self, index: usize) -> u32 {
         let layer_size = self.side_size.pow(2);
         for i in 0..self.side_size {
@@ -65,7 +70,7 @@ impl RubiksCube {
         unreachable!()
     }
 
-    /// return horizontal cube layer from 0 to side_size
+    /// returns horizontal cube layer from 0 to side_size
     fn horizontal_layer(&self, index: usize) -> u32 {
         let vert_layer = self.vertical_layer(index);
         for i in 0..self.side_size {
@@ -88,7 +93,8 @@ fn setup(
     let sub_cube_mesh = meshes.add(Mesh::from(shape::Cube {
         size: CUBE_SIDE_SIZE as f32,
     }));
-    let sub_cube_selected_material = materials.add(Color::GREEN.into());
+    let sub_cube_selected_material = materials.add(Color::ORANGE.into());
+    let sub_cube_pointed_material = materials.add(Color::GREEN.into());
     let sub_cube_not_selected_material = materials.add(Color::WHITE.into());
     let mut sub_cubes = Vec::new();
     commands
@@ -133,13 +139,15 @@ fn setup(
 
     commands.insert_resource(SubCubeMaterials {
         selected: sub_cube_selected_material,
+        pointed: sub_cube_pointed_material,
         not_selected: sub_cube_not_selected_material,
     });
 
+    commands.insert_resource(CurrentlyPointedAtSubCube::default());
     commands.insert_resource(CurrentlySelectedSubCube::default());
 }
 
-fn sub_cube_selection(
+fn pointing_at_sub_cube(
     cursor_ray: Res<CursorRay>,
     sub_cube_materials: Res<SubCubeMaterials>,
     mut query: Query<
@@ -151,7 +159,7 @@ fn sub_cube_selection(
         ),
         With<SubCube>,
     >,
-    mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
+    mut currently_selected_sub_cube: ResMut<CurrentlyPointedAtSubCube>,
 ) {
     let mut closest = f32::MAX;
     let mut newly_selected = None;
@@ -169,7 +177,7 @@ fn sub_cube_selection(
     if newly_selected != currently_selected_sub_cube.0 {
         if let Some(entity) = newly_selected {
             if let Ok(mut material) = query.get_component_mut::<Handle<StandardMaterial>>(entity) {
-                *material = sub_cube_materials.selected.clone();
+                *material = sub_cube_materials.pointed.clone();
             }
         }
 
@@ -182,6 +190,29 @@ fn sub_cube_selection(
         }
 
         currently_selected_sub_cube.0 = newly_selected;
+    }
+}
+
+fn selecting_sub_cube(
+    key_input: Res<Input<KeyCode>>,
+    sub_cube_materials: Res<SubCubeMaterials>,
+    currently_pointed_at_sub_cube: Res<CurrentlyPointedAtSubCube>,
+    mut sub_cubes: Query<&mut Handle<StandardMaterial>, With<SubCube>>,
+    mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
+) {
+    if key_input.just_pressed(KeyCode::Space) {
+        if let Some(entity) = currently_selected_sub_cube.0 {
+            if let Ok(mut sub_cube_material) = sub_cubes.get_mut(entity) {
+                *sub_cube_material = sub_cube_materials.not_selected.clone();
+                currently_selected_sub_cube.0 = None;
+            }
+        }
+        if let Some(entity) = currently_pointed_at_sub_cube.0 {
+            if let Ok(mut sub_cube_material) = sub_cubes.get_mut(entity) {
+                *sub_cube_material = sub_cube_materials.selected.clone();
+                currently_selected_sub_cube.0 = currently_pointed_at_sub_cube.0;
+            }
+        }
     }
 }
 
