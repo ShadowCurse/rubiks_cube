@@ -2,7 +2,7 @@ use bevy::{prelude::*, render::primitives::Aabb};
 
 use crate::cursor::CursorRay;
 
-const CUBE_SIDES: u32 = 4;
+const CUBE_SIDES: u32 = 3;
 const CUBE_SIDE_SIZE: f32 = 0.1;
 const CUBE_SPACING: f32 = 0.15;
 
@@ -29,13 +29,19 @@ struct CurrentlyPointedAtSubCube(Option<Entity>);
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct CurrentlySelectedSubCube(Option<Entity>);
 
+#[derive(Resource, Debug, Default, Clone, Copy)]
+struct CurrentlySelectedSubCubeRayDistance(Option<Vec3>);
+
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct SubCube(usize);
 
 #[derive(Component, Debug, Clone)]
 struct RubiksCube {
     side_size: u32,
-    cubes: Vec<Entity>,
+    // maps cube position to the entity
+    pos_to_cube: Vec<Entity>,
+    // maps entity to cube_position
+    cube_to_pos: Vec<usize>,
 }
 
 impl RubiksCube {
@@ -43,7 +49,7 @@ impl RubiksCube {
         let layer_size = self.side_size.pow(2);
         let vert_layer = self.vertical_layer(index);
         ((vert_layer * layer_size)..((vert_layer + 1) * layer_size))
-            .map(|i| self.cubes[i as usize])
+            .map(|i| self.pos_to_cube[i as usize])
             .collect()
     }
 
@@ -54,7 +60,7 @@ impl RubiksCube {
                 ((hor_layer * self.side_size) + vert_layer * self.side_size.pow(2)
                     ..(hor_layer * self.side_size + self.side_size)
                         + vert_layer * self.side_size.pow(2))
-                    .map(|i| self.cubes[i as usize])
+                    .map(|i| self.pos_to_cube[i as usize])
             })
             .collect()
     }
@@ -91,14 +97,14 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let sub_cube_mesh = meshes.add(Mesh::from(shape::Cube {
-        size: CUBE_SIDE_SIZE as f32,
+        size: CUBE_SIDE_SIZE,
     }));
     let sub_cube_selected_material = materials.add(Color::ORANGE.into());
     let sub_cube_pointed_material = materials.add(Color::GREEN.into());
     let sub_cube_not_selected_material = materials.add(Color::WHITE.into());
-    let mut sub_cubes = Vec::new();
+    let mut pos_to_cube = Vec::new();
     commands
-        .spawn_bundle((
+        .spawn((
             Transform::default(),
             GlobalTransform::default(),
             Visibility::default(),
@@ -115,7 +121,7 @@ fn setup(
                     for z in 0..CUBE_SIDES {
                         let index = CUBE_SIDES * CUBE_SIDES * x + CUBE_SIDES * y + z + 1;
                         let entity = builder
-                            .spawn_bundle(PbrBundle {
+                            .spawn(PbrBundle {
                                 mesh: sub_cube_mesh.clone(),
                                 material: sub_cube_not_selected_material.clone(),
                                 transform: Transform::from_xyz(
@@ -127,14 +133,15 @@ fn setup(
                             })
                             .insert(SubCube(index as usize))
                             .id();
-                        sub_cubes.push(entity);
+                        pos_to_cube.push(entity);
                     }
                 }
             }
         })
         .insert(RubiksCube {
             side_size: CUBE_SIDES,
-            cubes: sub_cubes,
+            pos_to_cube,
+            cube_to_pos: (1_usize..(CUBE_SIDES as usize).pow(3)).collect(),
         });
 
     commands.insert_resource(SubCubeMaterials {
@@ -145,22 +152,17 @@ fn setup(
 
     commands.insert_resource(CurrentlyPointedAtSubCube::default());
     commands.insert_resource(CurrentlySelectedSubCube::default());
+    commands.insert_resource(CurrentlySelectedSubCubeRayDistance::default());
 }
 
 fn pointing_at_sub_cube(
     cursor_ray: Res<CursorRay>,
     sub_cube_materials: Res<SubCubeMaterials>,
-    mut query: Query<
-        (
-            Entity,
-            &Aabb,
-            &GlobalTransform,
-            &mut Handle<StandardMaterial>,
-        ),
-        With<SubCube>,
-    >,
+    mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
     mut currently_selected_sub_cube: ResMut<CurrentlyPointedAtSubCube>,
+    mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayDistance>,
 ) {
+    // check intersections with cubes
     let mut closest = f32::MAX;
     let mut newly_selected = None;
     for (entity, aabb, transform, _material) in query.iter_mut() {
@@ -174,13 +176,29 @@ fn pointing_at_sub_cube(
             }
         }
     }
+
+    // sets intersection normal
+    if let Some(entity) = newly_selected {
+        if let Ok((_, aabb, transform, _)) = query.get(entity) {
+            currently_selected_sub_cube_normal.0 = Some(cursor_ray.0.aabb_plane_normal(
+                closest,
+                aabb,
+                &transform.compute_matrix(),
+            ));
+        }
+    }
+
     if newly_selected != currently_selected_sub_cube.0 {
+        // color pointed cube
         if let Some(entity) = newly_selected {
             if let Ok(mut material) = query.get_component_mut::<Handle<StandardMaterial>>(entity) {
                 *material = sub_cube_materials.pointed.clone();
             }
+        } else {
+            currently_selected_sub_cube_normal.0 = None;
         }
 
+        // remove color from perviously selected cube
         if let Some(currently_selected) = currently_selected_sub_cube.0 {
             if let Ok(mut material) =
                 query.get_component_mut::<Handle<StandardMaterial>>(currently_selected)
@@ -201,12 +219,14 @@ fn selecting_sub_cube(
     mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
 ) {
     if key_input.just_pressed(KeyCode::Space) {
+        // remove color from perviously selected cube
         if let Some(entity) = currently_selected_sub_cube.0 {
             if let Ok(mut sub_cube_material) = sub_cubes.get_mut(entity) {
                 *sub_cube_material = sub_cube_materials.not_selected.clone();
                 currently_selected_sub_cube.0 = None;
             }
         }
+        // color selected cube
         if let Some(entity) = currently_pointed_at_sub_cube.0 {
             if let Ok(mut sub_cube_material) = sub_cubes.get_mut(entity) {
                 *sub_cube_material = sub_cube_materials.selected.clone();
@@ -233,7 +253,8 @@ mod tests {
         }
         RubiksCube {
             side_size: sides,
-            cubes: sub_cubes,
+            pos_to_cube: sub_cubes,
+            cube_to_pos: (1_usize..(sides as usize).pow(3)).collect(),
         }
     }
 

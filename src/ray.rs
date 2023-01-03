@@ -33,6 +33,10 @@ impl Ray {
         })
     }
 
+    pub fn at(&self, t: f32) -> Vec3A {
+        self.origin + self.direction * t
+    }
+
     pub fn intersects_aabb(&self, aabb: &Aabb, model_to_world: &Mat4) -> Option<[f32; 2]> {
         // Transform the ray to model space
         let world_to_model = model_to_world.inverse();
@@ -73,5 +77,39 @@ impl Ray {
             hit_far = t_max.z;
         }
         Some([hit_near, hit_far])
+    }
+
+    // returns the plane to whith the point of t lies closest
+    pub fn aabb_plane_normal(
+        &self,
+        t: f32,
+        aabb: &Aabb,
+        model_to_world: &Mat4,
+    ) -> Vec3 {
+        // Transform the ray to model space
+        let world_to_model = model_to_world.inverse();
+        let ray_dir: Vec3 = world_to_model.transform_vector3(self.direction.into());
+        let ray_origin: Vec3 = world_to_model.transform_point3(self.origin.into());
+
+        let point = ray_origin + t * ray_dir;
+
+        let mut closest_plane = f32::MAX;
+        let mut plane_normal = Vec3::default();
+        for (normal, plane_center) in [
+            (Vec3::X, aabb.half_extents.x),
+            (Vec3::NEG_X, -aabb.half_extents.x),
+            (Vec3::Y, aabb.half_extents.y),
+            (Vec3::NEG_Y, -aabb.half_extents.y),
+            (Vec3::Z, aabb.half_extents.z),
+            (Vec3::NEG_Z, -aabb.half_extents.z),
+        ] {
+            let close_to_plane = (plane_center - point).dot(normal);
+            if closest_plane > close_to_plane {
+                closest_plane = close_to_plane;
+                plane_normal = normal;
+            }
+        }
+
+        plane_normal
     }
 }
