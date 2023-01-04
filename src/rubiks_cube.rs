@@ -41,53 +41,60 @@ struct RubiksCube {
     // maps cube position to the entity
     pos_to_cube: Vec<Entity>,
     // maps entity to cube_position
-    cube_to_pos: Vec<usize>,
+    cube_to_pos: Vec<u32>,
 }
 
 impl RubiksCube {
-    pub fn select_vertical(&self, index: usize) -> Vec<Entity> {
-        let layer_size = self.side_size.pow(2);
-        let vert_layer = self.vertical_layer(index);
-        ((vert_layer * layer_size)..((vert_layer + 1) * layer_size))
-            .map(|i| self.pos_to_cube[i as usize])
-            .collect()
+    pub fn select_rotation(&self, cube_id: usize, rotation_axis: Vec3) -> Vec<Entity> {
+        let cube_pos = self.cube_to_pos[cube_id];
+        let (x, y, z) = self.pos_to_qube_coords(cube_pos);
+        if rotation_axis == Vec3::X {
+            self.select_x_layer(x)
+        } else if rotation_axis == Vec3::Y {
+            self.select_y_layer(y)
+        } else if rotation_axis == Vec3::Z {
+            self.select_z_layer(z)
+        } else {
+            unreachable!("Axis of rotation should only be a unit base vector")
+        }
+        .into_iter()
+        .map(|pos| self.pos_to_cube[pos as usize])
+        .collect()
     }
 
-    pub fn select_horizontal(&self, index: usize) -> Vec<Entity> {
-        let hor_layer = self.horizontal_layer(index);
+    fn corrds_to_pos(side_size: u32, x: u32, y: u32, z: u32) -> u32 {
+        x * side_size * side_size + y * side_size + z
+    }
+
+    pub fn cube_corrds_to_pos(&self, x: u32, y: u32, z: u32) -> u32 {
+        Self::corrds_to_pos(self.side_size, x, y, z)
+    }
+
+    pub fn pos_to_qube_coords(&self, mut cube_pos: u32) -> (u32, u32, u32) {
+        let z = cube_pos % self.side_size;
+        cube_pos /= self.side_size;
+        let y = cube_pos % self.side_size;
+        cube_pos /= self.side_size;
+        let x = cube_pos % self.side_size;
+        (x, y, z)
+    }
+
+    pub fn select_x_layer(&self, x: u32) -> Vec<u32> {
         (0..self.side_size)
-            .flat_map(|vert_layer| {
-                ((hor_layer * self.side_size) + vert_layer * self.side_size.pow(2)
-                    ..(hor_layer * self.side_size + self.side_size)
-                        + vert_layer * self.side_size.pow(2))
-                    .map(|i| self.pos_to_cube[i as usize])
-            })
+            .flat_map(|y| (0..self.side_size).map(move |z| self.cube_corrds_to_pos(x, y, z)))
             .collect()
     }
 
-    /// returns vertical cube layer from 0 to side_size
-    fn vertical_layer(&self, index: usize) -> u32 {
-        let layer_size = self.side_size.pow(2);
-        for i in 0..self.side_size {
-            if (index as u32) <= layer_size * (i + 1) {
-                return i;
-            }
-        }
-        unreachable!()
+    pub fn select_y_layer(&self, y: u32) -> Vec<u32> {
+        (0..self.side_size)
+            .flat_map(|x| (0..self.side_size).map(move |z| self.cube_corrds_to_pos(x, y, z)))
+            .collect()
     }
 
-    /// returns horizontal cube layer from 0 to side_size
-    fn horizontal_layer(&self, index: usize) -> u32 {
-        let vert_layer = self.vertical_layer(index);
-        for i in 0..self.side_size {
-            if (i * self.side_size + 1) + vert_layer * self.side_size.pow(2) <= (index as u32)
-                && (index as u32)
-                    <= (i * self.side_size + self.side_size) + vert_layer * self.side_size.pow(2)
-            {
-                return i;
-            }
-        }
-        unreachable!()
+    pub fn select_z_layer(&self, z: u32) -> Vec<u32> {
+        (0..self.side_size)
+            .flat_map(|x| (0..self.side_size).map(move |y| self.cube_corrds_to_pos(x, y, z)))
+            .collect()
     }
 }
 
@@ -119,7 +126,11 @@ fn setup(
             for x in 0..CUBE_SIDES {
                 for y in 0..CUBE_SIDES {
                     for z in 0..CUBE_SIDES {
-                        let index = CUBE_SIDES * CUBE_SIDES * x + CUBE_SIDES * y + z + 1;
+                        // basically xyz represents a number in CUBE_SIDES base system and
+                        // index is dec representation of it
+                        // so this index can be used as just id of a cube
+                        // and as a mapping to the position of the qube
+                        let index = RubiksCube::corrds_to_pos(CUBE_SIDES, x, y, z);
                         let entity = builder
                             .spawn(PbrBundle {
                                 mesh: sub_cube_mesh.clone(),
@@ -134,6 +145,7 @@ fn setup(
                             .insert(SubCube(index as usize))
                             .id();
                         pos_to_cube.push(entity);
+                        println!("index/pos: {index}/{x}:{y}:{z}");
                     }
                 }
             }
@@ -141,7 +153,7 @@ fn setup(
         .insert(RubiksCube {
             side_size: CUBE_SIDES,
             pos_to_cube,
-            cube_to_pos: (1_usize..(CUBE_SIDES as usize).pow(3)).collect(),
+            cube_to_pos: (0..CUBE_SIDES.pow(3)).collect(),
         });
 
     commands.insert_resource(SubCubeMaterials {
@@ -245,7 +257,7 @@ mod tests {
         for x in 0..sides {
             for y in 0..sides {
                 for z in 0..sides {
-                    let index = sides * sides * x + sides * y + z + 1;
+                    let index = RubiksCube::corrds_to_pos(sides, x, y, z);
                     let entity = Entity::from_raw(index);
                     sub_cubes.push(entity);
                 }
@@ -254,94 +266,74 @@ mod tests {
         RubiksCube {
             side_size: sides,
             pos_to_cube: sub_cubes,
-            cube_to_pos: (1_usize..(sides as usize).pow(3)).collect(),
+            cube_to_pos: (0..sides.pow(3)).collect(),
         }
     }
 
     #[test]
-    fn vertical_layer() {
-        let rb = generate_rb(3);
-        for i in 1..10 {
-            assert_eq!(rb.vertical_layer(i), 0);
-        }
-        for i in 10..19 {
-            assert_eq!(rb.vertical_layer(i), 1);
-        }
-        for i in 19..28 {
-            assert_eq!(rb.vertical_layer(i), 2);
-        }
-    }
-
-    #[test]
-    fn horizontal_layer() {
-        let rb = generate_rb(3);
-        let layers = [
-            ([1, 2, 3], 0),
-            ([4, 5, 6], 1),
-            ([7, 8, 9], 2),
-            ([10, 11, 12], 0),
-            ([13, 14, 15], 1),
-            ([16, 17, 18], 2),
-            ([19, 20, 21], 0),
-            ([22, 23, 24], 1),
-            ([25, 26, 27], 2),
-        ];
-        for (cubes, layer) in layers {
-            for c in cubes {
-                assert_eq!(rb.horizontal_layer(c), layer);
+    fn rb_qube_coords_and_pos() {
+        let sides = 3;
+        let rb = generate_rb(sides);
+        for x in 0..sides {
+            for y in 0..sides {
+                for z in 0..sides {
+                    let pos = rb.cube_corrds_to_pos(x, y, z);
+                    let coords = rb.pos_to_qube_coords(pos);
+                    assert_eq!((x, y, z), coords);
+                }
             }
         }
     }
 
     #[test]
-    fn select_vertical_layer() {
+    fn rb_select_layers() {
         let rb = generate_rb(3);
-        for i in 1..10 {
-            assert_eq!(
-                rb.select_vertical(i),
-                vec![1, 2, 3, 4, 5, 6, 7, 8, 9]
-                    .into_iter()
-                    .map(Entity::from_raw)
-                    .collect::<Vec<_>>()
-            );
+        for x in 0..3 {
+            let offset = x * 9;
+            let layer = rb.select_x_layer(x);
+            let expected = (offset..offset + 9).collect::<Vec<_>>();
+            assert_eq!(layer, expected)
         }
-        for i in 10..19 {
-            assert_eq!(
-                rb.select_vertical(i),
-                vec![10, 11, 12, 13, 14, 15, 16, 17, 18]
-                    .into_iter()
-                    .map(Entity::from_raw)
-                    .collect::<Vec<_>>()
-            );
-        }
-        for i in 19..28 {
-            assert_eq!(
-                rb.select_vertical(i),
-                vec![19, 20, 21, 22, 23, 24, 25, 26, 27]
-                    .into_iter()
-                    .map(Entity::from_raw)
-                    .collect::<Vec<_>>()
-            );
-        }
-    }
-
-    #[test]
-    fn select_horizontal_layer() {
-        let rb = generate_rb(3);
-        let layers = [
-            [1, 2, 3, 10, 11, 12, 19, 20, 21],
-            [4, 5, 6, 13, 14, 15, 22, 23, 24],
-            [7, 8, 9, 16, 17, 18, 25, 26, 27],
-        ];
-        for layer in layers {
-            let entity_layer = layer
-                .iter()
-                .cloned()
-                .map(Entity::from_raw)
+        for y in 0..3 {
+            let offset = 3;
+            let layer = rb.select_y_layer(y);
+            let expected = vec![0, 1, 2, 9, 10, 11, 18, 19, 20]
+                .into_iter()
+                .map(|v| v + offset * y)
                 .collect::<Vec<_>>();
-            for l in layer {
-                assert_eq!(rb.select_horizontal(l as usize), entity_layer);
-            }
+            assert_eq!(layer, expected)
         }
+        for z in 0..3 {
+            let offset = 1;
+            let layer = rb.select_z_layer(z);
+            let expected = vec![0, 3, 6, 9, 12, 15, 18, 21, 24]
+                .into_iter()
+                .map(|v| v + offset * z)
+                .collect::<Vec<_>>();
+            assert_eq!(layer, expected)
+        }
+    }
+
+    #[test]
+    fn rb_select_rotation() {
+        let rb = generate_rb(3);
+        let x_entities = rb.select_rotation(0, Vec3::X);
+        let x_expected = vec![0, 1, 2, 3, 4, 5, 6, 7, 8]
+            .into_iter()
+            .map(Entity::from_raw)
+            .collect::<Vec<_>>();
+        assert_eq!(x_entities, x_expected);
+        let y_entities = rb.select_rotation(0, Vec3::Y);
+        let y_expected = vec![0, 1, 2, 9, 10, 11, 18, 19, 20]
+            .into_iter()
+            .map(Entity::from_raw)
+            .collect::<Vec<_>>();
+        assert_eq!(y_entities, y_expected);
+        let z_entities = rb.select_rotation(0, Vec3::Z);
+        let z_expected = vec![0, 3, 6, 9, 12, 15, 18, 21, 24]
+            .into_iter()
+            .map(Entity::from_raw)
+            .collect::<Vec<_>>();
+        assert_eq!(z_entities, z_expected);
     }
 }
