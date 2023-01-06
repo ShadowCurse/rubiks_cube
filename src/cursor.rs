@@ -1,4 +1,3 @@
-use crate::ray::Ray;
 use bevy::prelude::*;
 
 pub struct CursorRayPlugin;
@@ -52,7 +51,7 @@ fn world_cursor_system(
             .get_primary()
             .expect("We need a primary window to play the game");
         if let Some(screen_pos) = window.cursor_position() {
-            if let Some(ray) = Ray::from_screenspace(screen_pos, camera, camera_transform) {
+            if let Some(ray) = camera.viewport_to_world(camera_transform, screen_pos) {
                 crs.0 = ray;
             }
         }

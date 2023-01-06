@@ -1,49 +1,18 @@
 use bevy::{math::Vec3A, prelude::*, render::primitives::Aabb};
 
-#[derive(Debug, Default, Clone)]
-pub struct Ray {
-    origin: Vec3A,
-    direction: Vec3A,
+pub trait RayExtension {
+    fn intersects_aabb(&self, aabb: &Aabb, model_to_world: &Mat4) -> Option<[f32; 2]>;
+    fn aabb_plane_normal(&self, t: f32, aabb: &Aabb, model_to_world: &Mat4) -> Vec3;
 }
 
-impl Ray {
-    pub fn from_screenspace(
-        cursor_screen_pos: Vec2,
-        camera: &Camera,
-        camera_transform: &GlobalTransform,
-    ) -> Option<Self> {
-        let (viewport_min, viewport_max) = camera.logical_viewport_rect()?;
-        let screen_size = camera.logical_target_size()?;
-        let adj_cursor_pos =
-            cursor_screen_pos - Vec2::new(viewport_min.x, screen_size.y - viewport_max.y);
-
-        let viewport_size = viewport_max - viewport_min;
-        let view = camera_transform.compute_matrix();
-        let projection = camera.projection_matrix();
-        let far_ndc = projection.project_point3(Vec3::NEG_Z).z;
-        let near_ndc = projection.project_point3(Vec3::Z).z;
-        let cursor_ndc = (adj_cursor_pos / viewport_size) * 2.0 - Vec2::ONE;
-        let ndc_to_world: Mat4 = view * projection.inverse();
-        let near = ndc_to_world.project_point3(cursor_ndc.extend(near_ndc));
-        let far = ndc_to_world.project_point3(cursor_ndc.extend(far_ndc));
-        let ray_direction = far - near;
-        Some(Self {
-            origin: near.into(),
-            direction: ray_direction.normalize().into(),
-        })
-    }
-
-    pub fn at(&self, t: f32) -> Vec3A {
-        self.origin + self.direction * t
-    }
-
-    pub fn intersects_aabb(&self, aabb: &Aabb, model_to_world: &Mat4) -> Option<[f32; 2]> {
+impl RayExtension for Ray {
+    fn intersects_aabb(&self, aabb: &Aabb, model_to_world: &Mat4) -> Option<[f32; 2]> {
         // Transform the ray to model space
         let world_to_model = model_to_world.inverse();
         let ray_dir: Vec3A = world_to_model
-            .transform_vector3(self.direction.into())
+            .transform_vector3(self.direction)
             .into();
-        let ray_origin: Vec3A = world_to_model.transform_point3(self.origin.into()).into();
+        let ray_origin: Vec3A = world_to_model.transform_point3(self.origin).into();
         // Check if the ray intersects the mesh's AABB. It's useful to work in model space because
         // we can do an AABB intersection test, instead of an OBB intersection test.
 
@@ -80,16 +49,11 @@ impl Ray {
     }
 
     // returns the plane to whith the point of t lies closest
-    pub fn aabb_plane_normal(
-        &self,
-        t: f32,
-        aabb: &Aabb,
-        model_to_world: &Mat4,
-    ) -> Vec3 {
+    fn aabb_plane_normal(&self, t: f32, aabb: &Aabb, model_to_world: &Mat4) -> Vec3 {
         // Transform the ray to model space
         let world_to_model = model_to_world.inverse();
-        let ray_dir: Vec3 = world_to_model.transform_vector3(self.direction.into());
-        let ray_origin: Vec3 = world_to_model.transform_point3(self.origin.into());
+        let ray_dir: Vec3 = world_to_model.transform_vector3(self.direction);
+        let ray_origin: Vec3 = world_to_model.transform_point3(self.origin);
 
         let point = ray_origin + t * ray_dir;
 
