@@ -1,6 +1,6 @@
 use bevy::{prelude::*, render::primitives::Aabb};
 
-use crate::cursor::CursorRay;
+use crate::{cursor::CursorRay, ray_extension::RayExtension};
 
 const CUBE_SIDES: u32 = 3;
 const CUBE_SIDE_SIZE: f32 = 0.1;
@@ -30,10 +30,16 @@ struct CurrentlyPointedAtSubCube(Option<Entity>);
 struct CurrentlySelectedSubCube(Option<Entity>);
 
 #[derive(Resource, Debug, Default, Clone, Copy)]
-struct CurrentlySelectedSubCubeRayDistance(Option<Vec3>);
+struct CurrentlySelectedSubCubeRayNormal(Option<Vec3>);
 
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct SubCube(usize);
+
+#[derive(Debug)]
+enum Rotation {
+    Cw,
+    Ccw,
+}
 
 #[derive(Component, Debug, Clone)]
 struct RubiksCube {
@@ -45,21 +51,65 @@ struct RubiksCube {
 }
 
 impl RubiksCube {
-    pub fn select_rotation(&self, cube_id: usize, rotation_axis: Vec3) -> Vec<Entity> {
+    pub fn rotate(&mut self, cube_id: usize, cube_normal: Vec3, direction: Vec3) {
+        let (axis, direction) = Self::select_axis_and_direction(cube_normal, direction);
+
+        let selection = self.select_rotation(cube_id, axis);
+        let rotated = self.rotate_indices(&selection, direction);
+
+        let mut pos_to_cube_new = self.pos_to_cube.clone();
+        for (s, r) in selection.into_iter().zip(rotated.into_iter()) {
+            pos_to_cube_new[s as usize] = self.pos_to_cube[r as usize];
+        }
+        self.pos_to_cube = pos_to_cube_new;
+    }
+
+    pub fn rotate_indices(&self, indices: &[u32], rotation: Rotation) -> Vec<u32> {
+        match rotation {
+            Rotation::Ccw => (1..=self.side_size)
+                .flat_map(|i| {
+                    (1..=self.side_size).map(move |j| indices[(self.side_size * j - i) as usize])
+                })
+                .collect(),
+            Rotation::Cw => (1..=self.side_size)
+                .rev()
+                .flat_map(|i| {
+                    (1..=self.side_size)
+                        .rev()
+                        .map(move |j| indices[(self.side_size * j - i) as usize])
+                })
+                .collect(),
+        }
+    }
+
+    pub fn select_rotation_entities(&self, cube_id: usize, rotation_axis: Vec3) -> Vec<Entity> {
+        self.select_rotation(cube_id, rotation_axis)
+            .into_iter()
+            .map(|i| self.pos_to_cube[i as usize])
+            .collect()
+    }
+
+    pub fn select_rotation(&self, cube_id: usize, rotation_axis: Vec3) -> Vec<u32> {
         let cube_pos = self.cube_to_pos[cube_id];
         let (x, y, z) = self.pos_to_qube_coords(cube_pos);
-        if rotation_axis == Vec3::X {
+        if rotation_axis == Vec3::X || rotation_axis == Vec3::NEG_X {
             self.select_x_layer(x)
-        } else if rotation_axis == Vec3::Y {
+        } else if rotation_axis == Vec3::Y || rotation_axis == Vec3::NEG_Y {
             self.select_y_layer(y)
-        } else if rotation_axis == Vec3::Z {
+        } else if rotation_axis == Vec3::Z || rotation_axis == Vec3::NEG_Z {
             self.select_z_layer(z)
         } else {
             unreachable!("Axis of rotation should only be a unit base vector")
         }
-        .into_iter()
-        .map(|pos| self.pos_to_cube[pos as usize])
-        .collect()
+    }
+
+    fn select_axis_and_direction(normal: Vec3, direction: Vec3) -> (Vec3, Rotation) {
+        let cross = normal.cross(direction);
+        if cross.x.is_sign_negative() || cross.y.is_sign_negative() || cross.z.is_sign_negative() {
+            (cross, Rotation::Cw)
+        } else {
+            (cross, Rotation::Ccw)
+        }
     }
 
     fn corrds_to_pos(side_size: u32, x: u32, y: u32, z: u32) -> u32 {
@@ -164,7 +214,7 @@ fn setup(
 
     commands.insert_resource(CurrentlyPointedAtSubCube::default());
     commands.insert_resource(CurrentlySelectedSubCube::default());
-    commands.insert_resource(CurrentlySelectedSubCubeRayDistance::default());
+    commands.insert_resource(CurrentlySelectedSubCubeRayNormal::default());
 }
 
 fn pointing_at_sub_cube(
@@ -172,7 +222,7 @@ fn pointing_at_sub_cube(
     sub_cube_materials: Res<SubCubeMaterials>,
     mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
     mut currently_selected_sub_cube: ResMut<CurrentlyPointedAtSubCube>,
-    mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayDistance>,
+    mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayNormal>,
 ) {
     // check intersections with cubes
     let mut closest = f32::MAX;
@@ -271,6 +321,71 @@ mod tests {
     }
 
     #[test]
+    fn rb_rotate() {
+        let mut rb = generate_rb(3);
+        rb.rotate(0, Vec3::NEG_Y, Vec3::Z);
+        let expected_cubes_pos = vec![
+            6, 3, 0, 7, 4, 1, 8, 5, 2, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26,
+        ]
+        .into_iter()
+        .map(Entity::from_raw)
+        .collect::<Vec<_>>();
+        assert_eq!(rb.pos_to_cube, expected_cubes_pos);
+
+        let mut rb = generate_rb(3);
+        rb.rotate(0, Vec3::NEG_X, Vec3::Z);
+        let expected_cubes_pos = vec![
+            18, 9, 0, 3, 4, 5, 6, 7, 8, 19, 10, 1, 12, 13, 14, 15, 16, 17, 20, 11, 2, 21, 22, 23,
+            24, 25, 26,
+        ]
+        .into_iter()
+        .map(Entity::from_raw)
+        .collect::<Vec<_>>();
+        assert_eq!(rb.pos_to_cube, expected_cubes_pos);
+
+        let mut rb = generate_rb(3);
+        rb.rotate(0, Vec3::NEG_X, Vec3::Y);
+        let expected_cubes_pos = vec![
+            18, 1, 2, 9, 4, 5, 0, 7, 8, 21, 10, 11, 12, 13, 14, 3, 16, 17, 24, 19, 20, 15, 22, 23,
+            6, 25, 26,
+        ]
+        .into_iter()
+        .map(Entity::from_raw)
+        .collect::<Vec<_>>();
+        assert_eq!(rb.pos_to_cube, expected_cubes_pos);
+    }
+
+    #[test]
+    fn rb_rotate_indices() {
+        let rb = generate_rb(3);
+
+        let indices = rb.select_rotation(0, Vec3::X);
+        let rotated = rb.rotate_indices(&indices, Rotation::Cw);
+        let expected = vec![6, 3, 0, 7, 4, 1, 8, 5, 2];
+        assert_eq!(rotated, expected);
+        let rotated = rb.rotate_indices(&indices, Rotation::Ccw);
+        let expected = vec![2, 5, 8, 1, 4, 7, 0, 3, 6];
+        assert_eq!(rotated, expected);
+
+        let indices = rb.select_rotation(0, Vec3::Y);
+        let rotated = rb.rotate_indices(&indices, Rotation::Cw);
+        let expected = vec![18, 9, 0, 19, 10, 1, 20, 11, 2];
+        assert_eq!(rotated, expected);
+        let rotated = rb.rotate_indices(&indices, Rotation::Ccw);
+        let expected = vec![2, 11, 20, 1, 10, 19, 0, 9, 18];
+        assert_eq!(rotated, expected);
+
+        let indices = rb.select_rotation(0, Vec3::Z);
+        let rotated = rb.rotate_indices(&indices, Rotation::Cw);
+        let expected = vec![18, 9, 0, 21, 12, 3, 24, 15, 6];
+        assert_eq!(rotated, expected);
+        let rotated = rb.rotate_indices(&indices, Rotation::Ccw);
+        let expected = vec![6, 15, 24, 3, 12, 21, 0, 9, 18];
+        assert_eq!(rotated, expected);
+    }
+
+    #[test]
     fn rb_qube_coords_and_pos() {
         let sides = 3;
         let rb = generate_rb(sides);
@@ -318,22 +433,13 @@ mod tests {
     fn rb_select_rotation() {
         let rb = generate_rb(3);
         let x_entities = rb.select_rotation(0, Vec3::X);
-        let x_expected = vec![0, 1, 2, 3, 4, 5, 6, 7, 8]
-            .into_iter()
-            .map(Entity::from_raw)
-            .collect::<Vec<_>>();
+        let x_expected = vec![0, 1, 2, 3, 4, 5, 6, 7, 8];
         assert_eq!(x_entities, x_expected);
         let y_entities = rb.select_rotation(0, Vec3::Y);
-        let y_expected = vec![0, 1, 2, 9, 10, 11, 18, 19, 20]
-            .into_iter()
-            .map(Entity::from_raw)
-            .collect::<Vec<_>>();
+        let y_expected = vec![0, 1, 2, 9, 10, 11, 18, 19, 20];
         assert_eq!(y_entities, y_expected);
         let z_entities = rb.select_rotation(0, Vec3::Z);
-        let z_expected = vec![0, 3, 6, 9, 12, 15, 18, 21, 24]
-            .into_iter()
-            .map(Entity::from_raw)
-            .collect::<Vec<_>>();
+        let z_expected = vec![0, 3, 6, 9, 12, 15, 18, 21, 24];
         assert_eq!(z_entities, z_expected);
     }
 }
