@@ -1,6 +1,9 @@
 use bevy::{prelude::*, render::primitives::Aabb};
 
-use crate::{cursor::CursorRay, ray_extension::RayExtension};
+use crate::{
+    cursor::{CursorCollinearAxis, CursorRay, CursorSelectionVector},
+    ray_extension::RayExtension,
+};
 
 const CUBE_SIDES: u32 = 3;
 const CUBE_SIDE_SIZE: f32 = 0.1;
@@ -13,6 +16,7 @@ impl Plugin for RubiksCubePlugin {
         app.add_startup_system(setup);
         app.add_system(pointing_at_sub_cube);
         app.add_system(selecting_sub_cube);
+        app.add_system(rotate_side);
     }
 }
 
@@ -25,6 +29,9 @@ struct SubCubeMaterials {
 
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct CurrentlyPointedAtSubCube(Option<Entity>);
+
+#[derive(Resource, Debug, Default, Clone, Copy)]
+struct CurrentlyPointedAtSubCubeRayNormal(Option<Vec3>);
 
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct CurrentlySelectedSubCube(Option<Entity>);
@@ -195,7 +202,6 @@ fn setup(
                             .insert(SubCube(index as usize))
                             .id();
                         pos_to_cube.push(entity);
-                        println!("index/pos: {index}/{x}:{y}:{z}");
                     }
                 }
             }
@@ -213,16 +219,16 @@ fn setup(
     });
 
     commands.insert_resource(CurrentlyPointedAtSubCube::default());
+    commands.insert_resource(CurrentlyPointedAtSubCubeRayNormal::default());
     commands.insert_resource(CurrentlySelectedSubCube::default());
     commands.insert_resource(CurrentlySelectedSubCubeRayNormal::default());
 }
 
 fn pointing_at_sub_cube(
     cursor_ray: Res<CursorRay>,
-    sub_cube_materials: Res<SubCubeMaterials>,
     mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
-    mut currently_selected_sub_cube: ResMut<CurrentlyPointedAtSubCube>,
-    mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayNormal>,
+    mut currently_pointed_at_sub_cube: ResMut<CurrentlyPointedAtSubCube>,
+    mut currently_pointed_at_sub_cube_normal: ResMut<CurrentlyPointedAtSubCubeRayNormal>,
 ) {
     // check intersections with cubes
     let mut closest = f32::MAX;
@@ -242,7 +248,7 @@ fn pointing_at_sub_cube(
     // sets intersection normal
     if let Some(entity) = newly_selected {
         if let Ok((_, aabb, transform, _)) = query.get(entity) {
-            currently_selected_sub_cube_normal.0 = Some(cursor_ray.0.aabb_plane_normal(
+            currently_pointed_at_sub_cube_normal.0 = Some(cursor_ray.0.aabb_plane_normal(
                 closest,
                 aabb,
                 &transform.compute_matrix(),
@@ -250,26 +256,8 @@ fn pointing_at_sub_cube(
         }
     }
 
-    if newly_selected != currently_selected_sub_cube.0 {
-        // color pointed cube
-        if let Some(entity) = newly_selected {
-            if let Ok(mut material) = query.get_component_mut::<Handle<StandardMaterial>>(entity) {
-                *material = sub_cube_materials.pointed.clone();
-            }
-        } else {
-            currently_selected_sub_cube_normal.0 = None;
-        }
-
-        // remove color from perviously selected cube
-        if let Some(currently_selected) = currently_selected_sub_cube.0 {
-            if let Ok(mut material) =
-                query.get_component_mut::<Handle<StandardMaterial>>(currently_selected)
-            {
-                *material = sub_cube_materials.not_selected.clone();
-            }
-        }
-
-        currently_selected_sub_cube.0 = newly_selected;
+    if newly_selected != currently_pointed_at_sub_cube.0 {
+        currently_pointed_at_sub_cube.0 = newly_selected;
     }
 }
 
@@ -277,8 +265,10 @@ fn selecting_sub_cube(
     key_input: Res<Input<KeyCode>>,
     sub_cube_materials: Res<SubCubeMaterials>,
     currently_pointed_at_sub_cube: Res<CurrentlyPointedAtSubCube>,
+    currently_pointed_at_sub_cube_normal: Res<CurrentlyPointedAtSubCubeRayNormal>,
     mut sub_cubes: Query<&mut Handle<StandardMaterial>, With<SubCube>>,
     mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
+    mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayNormal>,
 ) {
     if key_input.just_pressed(KeyCode::Space) {
         // remove color from perviously selected cube
@@ -286,6 +276,7 @@ fn selecting_sub_cube(
             if let Ok(mut sub_cube_material) = sub_cubes.get_mut(entity) {
                 *sub_cube_material = sub_cube_materials.not_selected.clone();
                 currently_selected_sub_cube.0 = None;
+                currently_selected_sub_cube_normal.0 = None;
             }
         }
         // color selected cube
@@ -293,6 +284,55 @@ fn selecting_sub_cube(
             if let Ok(mut sub_cube_material) = sub_cubes.get_mut(entity) {
                 *sub_cube_material = sub_cube_materials.selected.clone();
                 currently_selected_sub_cube.0 = currently_pointed_at_sub_cube.0;
+                currently_selected_sub_cube_normal.0 = currently_pointed_at_sub_cube_normal.0;
+            }
+        }
+    }
+}
+
+fn rotate_side(
+    rubiks_cube: Query<&RubiksCube>,
+    currently_selected_sub_cube: Res<CurrentlySelectedSubCube>,
+    currently_selected_sub_cube_normal: Res<CurrentlySelectedSubCubeRayNormal>,
+    cursor_collinear_axis: Res<CursorCollinearAxis>,
+    cursor_selection_vector: Res<CursorSelectionVector>,
+    mut sub_cubes: Query<(&SubCube, &mut Transform)>,
+) {
+    if let Ok(rb) = rubiks_cube.get_single() {
+        if let (Some(normal), Some(direction), Some(selected_cube), Some(selection_vector)) = (
+            currently_selected_sub_cube_normal.0,
+            cursor_collinear_axis.0,
+            currently_selected_sub_cube.0,
+            cursor_selection_vector.0,
+        ) {
+            let (rotation_axis, _) = RubiksCube::select_axis_and_direction(normal, direction);
+            if let Ok(sub_cube) = sub_cubes.get_component::<SubCube>(selected_cube) {
+                let cube_entities = rb.select_rotation_entities(sub_cube.0, rotation_axis);
+                let angle = selection_vector.vec().length() / 10000.0;
+                for entity in cube_entities {
+                    let (_, mut transform) = sub_cubes
+                        .get_mut(entity)
+                        .expect("Subcubes in rubiks cube should be in the query");
+                    if rotation_axis == Vec3::X {
+                        let rotation = Quat::from_rotation_x(angle);
+                        transform.rotate_around(Vec3::ZERO, rotation);
+                    } else if rotation_axis == Vec3::NEG_X {
+                        let rotation = Quat::from_rotation_x(-angle);
+                        transform.rotate_around(Vec3::ZERO, rotation);
+                    } else if rotation_axis == Vec3::Y {
+                        let rotation = Quat::from_rotation_y(angle);
+                        transform.rotate_around(Vec3::ZERO, rotation);
+                    } else if rotation_axis == Vec3::NEG_Y {
+                        let rotation = Quat::from_rotation_y(-angle);
+                        transform.rotate_around(Vec3::ZERO, rotation);
+                    } else if rotation_axis == Vec3::Z {
+                        let rotation = Quat::from_rotation_z(angle);
+                        transform.rotate_around(Vec3::ZERO, rotation);
+                    } else if rotation_axis == Vec3::NEG_Z {
+                        let rotation = Quat::from_rotation_z(-angle);
+                        transform.rotate_around(Vec3::ZERO, rotation);
+                    }
+                }
             }
         }
     }
