@@ -8,6 +8,7 @@ impl Plugin for CursorRayPlugin {
         app.add_system(world_cursor_system);
         app.add_system(cursor_selection_vector);
         app.add_system(selection_vector_colliniar_axis);
+        app.add_system(projection_on_collinear_axis);
 
         app.add_startup_system(debug_axis);
         // app.add_system(debug_ray);
@@ -23,22 +24,20 @@ pub struct ScreenVector {
     end: Vec2,
 }
 
-impl ScreenVector {
-    pub fn vec(&self) -> Vec2 {
-        self.end - self.start
-    }
-}
-
 #[derive(Resource, Debug, Default)]
 pub struct CursorSelectionVector(pub Option<ScreenVector>);
 
 #[derive(Resource, Debug, Default)]
 pub struct CursorCollinearAxis(pub Option<Vec3>);
 
+#[derive(Resource, Debug, Default)]
+pub struct CollinearAxisProjection(pub Option<f32>);
+
 fn init(mut commands: Commands) {
     commands.insert_resource(CursorRay::default());
     commands.insert_resource(CursorSelectionVector::default());
     commands.insert_resource(CursorCollinearAxis::default());
+    commands.insert_resource(CollinearAxisProjection::default());
 }
 
 fn world_cursor_system(
@@ -62,6 +61,7 @@ fn cursor_selection_vector(
     mouse_input: Res<Input<MouseButton>>,
     windows: Res<Windows>,
     mut crs_vector: ResMut<CursorSelectionVector>,
+    mut crs_colliniar_axis: ResMut<CursorCollinearAxis>,
 ) {
     if mouse_input.just_pressed(MouseButton::Left) {
         let window = windows
@@ -84,7 +84,7 @@ fn cursor_selection_vector(
         }
     } else if mouse_input.just_released(MouseButton::Left) {
         crs_vector.0 = None;
-    } else {
+        crs_colliniar_axis.0 = None;
     }
 }
 
@@ -94,7 +94,7 @@ fn selection_vector_colliniar_axis(
     mut crs_colliniar_axis: ResMut<CursorCollinearAxis>,
 ) {
     if let Ok((camera, camera_transform)) = camera.get_single() {
-        if let Some(ref vec) = crs_vector.0 {
+        if let (Some(vec), None) = (crs_vector.0, crs_colliniar_axis.0) {
             if let (Some(ray_start), Some(ray_end)) = (
                 camera.viewport_to_world(camera_transform, vec.start),
                 camera.viewport_to_world(camera_transform, vec.end),
@@ -131,10 +131,29 @@ fn selection_vector_colliniar_axis(
             } else {
                 crs_colliniar_axis.0 = None;
             }
-        } else {
-            crs_colliniar_axis.0 = None;
         }
-        // println!("crs_colliniar_axis: {crs_colliniar_axis:?}");
+    }
+}
+
+fn projection_on_collinear_axis(
+    camera: Query<(&Camera, &GlobalTransform)>,
+    crs_vector: Res<CursorSelectionVector>,
+    crs_colliniar_axis: Res<CursorCollinearAxis>,
+    mut colliniar_axis_projection: ResMut<CollinearAxisProjection>,
+) {
+    if let (Some(vec), Some(axis), Ok((camera, camera_transform))) =
+        (crs_vector.0, crs_colliniar_axis.0, camera.get_single())
+    {
+        if let (Some(ray_start), Some(ray_end)) = (
+            camera.viewport_to_world(camera_transform, vec.start),
+            camera.viewport_to_world(camera_transform, vec.end),
+        ) {
+            let vec = ray_end.origin - ray_start.origin;
+            let projection = vec.dot(axis) / vec.length();
+            colliniar_axis_projection.0 = Some(projection);
+        }
+    } else {
+        colliniar_axis_projection.0 = None;
     }
 }
 

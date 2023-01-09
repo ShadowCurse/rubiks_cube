@@ -1,7 +1,7 @@
 use bevy::{prelude::*, render::primitives::Aabb};
 
 use crate::{
-    cursor::{CursorCollinearAxis, CursorRay, CursorSelectionVector},
+    cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay, CursorSelectionVector},
     ray_extension::RayExtension,
 };
 
@@ -295,43 +295,41 @@ fn rotate_side(
     currently_selected_sub_cube: Res<CurrentlySelectedSubCube>,
     currently_selected_sub_cube_normal: Res<CurrentlySelectedSubCubeRayNormal>,
     cursor_collinear_axis: Res<CursorCollinearAxis>,
-    cursor_selection_vector: Res<CursorSelectionVector>,
+    collinear_axis_projection: Res<CollinearAxisProjection>,
     mut sub_cubes: Query<(&SubCube, &mut Transform)>,
 ) {
     if let Ok(rb) = rubiks_cube.get_single() {
-        if let (Some(normal), Some(direction), Some(selected_cube), Some(selection_vector)) = (
+        if let (
+            Some(selected_cube),
+            Some(selected_sub_cube_normal),
+            Some(direction),
+            Some(axis_projection),
+        ) = (
+            currently_selected_sub_cube.0,
             currently_selected_sub_cube_normal.0,
             cursor_collinear_axis.0,
-            currently_selected_sub_cube.0,
-            cursor_selection_vector.0,
+            collinear_axis_projection.0,
         ) {
-            let (rotation_axis, _) = RubiksCube::select_axis_and_direction(normal, direction);
+            let (rotation_axis, _) =
+                RubiksCube::select_axis_and_direction(selected_sub_cube_normal, direction);
             if let Ok(sub_cube) = sub_cubes.get_component::<SubCube>(selected_cube) {
                 let cube_entities = rb.select_rotation_entities(sub_cube.0, rotation_axis);
-                let angle = selection_vector.vec().length() / 10000.0;
+                let angle = axis_projection / 100.0;
                 for entity in cube_entities {
                     let (_, mut transform) = sub_cubes
                         .get_mut(entity)
                         .expect("Subcubes in rubiks cube should be in the query");
-                    if rotation_axis == Vec3::X {
-                        let rotation = Quat::from_rotation_x(angle);
-                        transform.rotate_around(Vec3::ZERO, rotation);
-                    } else if rotation_axis == Vec3::NEG_X {
-                        let rotation = Quat::from_rotation_x(-angle);
-                        transform.rotate_around(Vec3::ZERO, rotation);
-                    } else if rotation_axis == Vec3::Y {
-                        let rotation = Quat::from_rotation_y(angle);
-                        transform.rotate_around(Vec3::ZERO, rotation);
-                    } else if rotation_axis == Vec3::NEG_Y {
-                        let rotation = Quat::from_rotation_y(-angle);
-                        transform.rotate_around(Vec3::ZERO, rotation);
-                    } else if rotation_axis == Vec3::Z {
-                        let rotation = Quat::from_rotation_z(angle);
-                        transform.rotate_around(Vec3::ZERO, rotation);
-                    } else if rotation_axis == Vec3::NEG_Z {
-                        let rotation = Quat::from_rotation_z(-angle);
-                        transform.rotate_around(Vec3::ZERO, rotation);
-                    }
+                    let rotation = if rotation_axis == Vec3::X || rotation_axis == Vec3::NEG_X {
+                        Quat::from_rotation_x(-angle)
+                    } else if rotation_axis == Vec3::Y || rotation_axis == Vec3::NEG_Y {
+                        Quat::from_rotation_y(angle)
+                    } else if rotation_axis == Vec3::Z || rotation_axis == Vec3::NEG_Z {
+                        Quat::from_rotation_z(angle)
+                    } else {
+                        println!("Got weired rotation axis: {rotation_axis}");
+                        return;
+                    };
+                    transform.rotate_around(Vec3::ZERO, rotation);
                 }
             }
         }
