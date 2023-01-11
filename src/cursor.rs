@@ -62,6 +62,7 @@ fn cursor_selection_vector(
     windows: Res<Windows>,
     mut crs_vector: ResMut<CursorSelectionVector>,
     mut crs_colliniar_axis: ResMut<CursorCollinearAxis>,
+    mut colliniar_axis_projection: ResMut<CollinearAxisProjection>,
 ) {
     if mouse_input.just_pressed(MouseButton::Left) {
         let window = windows
@@ -85,6 +86,7 @@ fn cursor_selection_vector(
     } else if mouse_input.just_released(MouseButton::Left) {
         crs_vector.0 = None;
         crs_colliniar_axis.0 = None;
+        colliniar_axis_projection.0 = None;
     }
 }
 

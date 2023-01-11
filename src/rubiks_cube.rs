@@ -1,7 +1,7 @@
 use bevy::{prelude::*, render::primitives::Aabb};
 
 use crate::{
-    cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay, CursorSelectionVector},
+    cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay},
     ray_extension::RayExtension,
 };
 
@@ -14,7 +14,7 @@ pub struct RubiksCubePlugin;
 impl Plugin for RubiksCubePlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(setup);
-        app.add_system(pointing_at_sub_cube);
+        // app.add_system(pointing_at_sub_cube);
         app.add_system(selecting_sub_cube);
         app.add_system(rotate_side);
     }
@@ -224,67 +224,92 @@ fn setup(
     commands.insert_resource(CurrentlySelectedSubCubeRayNormal::default());
 }
 
-fn pointing_at_sub_cube(
-    cursor_ray: Res<CursorRay>,
-    mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
-    mut currently_pointed_at_sub_cube: ResMut<CurrentlyPointedAtSubCube>,
-    mut currently_pointed_at_sub_cube_normal: ResMut<CurrentlyPointedAtSubCubeRayNormal>,
-) {
-    // check intersections with cubes
-    let mut closest = f32::MAX;
-    let mut newly_selected = None;
-    for (entity, aabb, transform, _material) in query.iter_mut() {
-        if let Some([hit_near, _hit_far]) = cursor_ray
-            .0
-            .intersects_aabb(aabb, &transform.compute_matrix())
-        {
-            if hit_near < closest {
-                closest = hit_near;
-                newly_selected = Some(entity);
-            }
-        }
-    }
-
-    // sets intersection normal
-    if let Some(entity) = newly_selected {
-        if let Ok((_, aabb, transform, _)) = query.get(entity) {
-            currently_pointed_at_sub_cube_normal.0 = Some(cursor_ray.0.aabb_plane_normal(
-                closest,
-                aabb,
-                &transform.compute_matrix(),
-            ));
-        }
-    }
-
-    if newly_selected != currently_pointed_at_sub_cube.0 {
-        currently_pointed_at_sub_cube.0 = newly_selected;
-    }
-}
+// fn pointing_at_sub_cube(
+//     cursor_ray: Res<CursorRay>,
+//     mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
+//     mut currently_pointed_at_sub_cube: ResMut<CurrentlyPointedAtSubCube>,
+//     mut currently_pointed_at_sub_cube_normal: ResMut<CurrentlyPointedAtSubCubeRayNormal>,
+// ) {
+//     // check intersections with cubes
+//     let mut closest = f32::MAX;
+//     let mut newly_selected = None;
+//     for (entity, aabb, transform, _material) in query.iter_mut() {
+//         if let Some([hit_near, _hit_far]) = cursor_ray
+//             .0
+//             .intersects_aabb(aabb, &transform.compute_matrix())
+//         {
+//             if hit_near < closest {
+//                 closest = hit_near;
+//                 newly_selected = Some(entity);
+//             }
+//         }
+//     }
+//
+//     // sets intersection normal
+//     if let Some(entity) = newly_selected {
+//         if let Ok((_, aabb, transform, _)) = query.get(entity) {
+//             currently_pointed_at_sub_cube_normal.0 = Some(cursor_ray.0.aabb_plane_normal(
+//                 closest,
+//                 aabb,
+//                 &transform.compute_matrix(),
+//             ));
+//         }
+//     }
+//
+//     if newly_selected != currently_pointed_at_sub_cube.0 {
+//         currently_pointed_at_sub_cube.0 = newly_selected;
+//     }
+// }
 
 fn selecting_sub_cube(
-    key_input: Res<Input<KeyCode>>,
+    mouse_input: Res<Input<MouseButton>>,
+    cursor_ray: Res<CursorRay>,
     sub_cube_materials: Res<SubCubeMaterials>,
-    currently_pointed_at_sub_cube: Res<CurrentlyPointedAtSubCube>,
-    currently_pointed_at_sub_cube_normal: Res<CurrentlyPointedAtSubCubeRayNormal>,
-    mut sub_cubes: Query<&mut Handle<StandardMaterial>, With<SubCube>>,
+    mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
     mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
     mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayNormal>,
 ) {
-    if key_input.just_pressed(KeyCode::Space) {
+    if mouse_input.just_pressed(MouseButton::Left) {
+        let mut closest = f32::MAX;
+        let mut newly_selected = None;
+        for (entity, aabb, transform, _) in query.iter_mut() {
+            if let Some([hit_near, _hit_far]) = cursor_ray
+                .0
+                .intersects_aabb(aabb, &transform.compute_matrix())
+            {
+                if hit_near < closest {
+                    closest = hit_near;
+                    newly_selected = Some(entity);
+                }
+            }
+        }
+
+        // sets intersection normal
+        if let Some(entity) = newly_selected {
+            if let Ok((_, aabb, transform, _)) = query.get(entity) {
+                currently_selected_sub_cube_normal.0 = Some(cursor_ray.0.aabb_plane_normal(
+                    closest,
+                    aabb,
+                    &transform.compute_matrix(),
+                ));
+            }
+        }
+
+        currently_selected_sub_cube.0 = newly_selected;
+
+        // color selected cube
+        if let Some(entity) = currently_selected_sub_cube.0 {
+            if let Ok(mut material) = query.get_component_mut::<Handle<StandardMaterial>>(entity) {
+                *material = sub_cube_materials.selected.clone();
+            }
+        }
+    } else if mouse_input.just_released(MouseButton::Left) {
         // remove color from perviously selected cube
         if let Some(entity) = currently_selected_sub_cube.0 {
-            if let Ok(mut sub_cube_material) = sub_cubes.get_mut(entity) {
+            if let Ok((_, _, _, mut sub_cube_material)) = query.get_mut(entity) {
                 *sub_cube_material = sub_cube_materials.not_selected.clone();
                 currently_selected_sub_cube.0 = None;
                 currently_selected_sub_cube_normal.0 = None;
-            }
-        }
-        // color selected cube
-        if let Some(entity) = currently_pointed_at_sub_cube.0 {
-            if let Ok(mut sub_cube_material) = sub_cubes.get_mut(entity) {
-                *sub_cube_material = sub_cube_materials.selected.clone();
-                currently_selected_sub_cube.0 = currently_pointed_at_sub_cube.0;
-                currently_selected_sub_cube_normal.0 = currently_pointed_at_sub_cube_normal.0;
             }
         }
     }
