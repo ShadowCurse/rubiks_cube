@@ -2,7 +2,7 @@ use bevy::{math::Vec3A, prelude::*, render::primitives::Aabb};
 
 pub trait RayExtension {
     fn intersects_aabb(&self, aabb: &Aabb, model_to_world: &Mat4) -> Option<[f32; 2]>;
-    fn aabb_plane_normal(&self, t: f32, aabb: &Aabb, model_to_world: &Mat4) -> Vec3;
+    fn aabb_plane_normal(&self, t: f32, aabb: &Aabb) -> Vec3;
 }
 
 impl RayExtension for Ray {
@@ -49,13 +49,8 @@ impl RayExtension for Ray {
     }
 
     // returns the plane to whith the point of t lies closest
-    fn aabb_plane_normal(&self, t: f32, aabb: &Aabb, model_to_world: &Mat4) -> Vec3 {
-        // Transform the ray to model space
-        let world_to_model = model_to_world.inverse();
-        let ray_dir: Vec3 = world_to_model.transform_vector3(self.direction);
-        let ray_origin: Vec3 = world_to_model.transform_point3(self.origin);
-
-        let point = ray_origin + t * ray_dir;
+    fn aabb_plane_normal(&self, t: f32, aabb: &Aabb) -> Vec3 {
+        let point = self.origin + t * self.direction;
 
         let mut closest_plane = f32::MAX;
         let mut plane_normal = Vec3::default();
