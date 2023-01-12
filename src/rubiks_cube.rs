@@ -17,6 +17,7 @@ impl Plugin for RubiksCubePlugin {
         // app.add_system(pointing_at_sub_cube);
         app.add_system(selecting_sub_cube);
         app.add_system(rotate_side);
+        app.add_system(stop_rotation);
     }
 }
 
@@ -38,6 +39,9 @@ struct CurrentlySelectedSubCube(Option<Entity>);
 
 #[derive(Resource, Debug, Default, Clone, Copy)]
 struct CurrentlySelectedSubCubeRayNormal(Option<Vec3>);
+
+#[derive(Resource, Debug, Default, Clone, Copy)]
+struct RotationAngle(f32);
 
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct SubCube(usize);
@@ -106,7 +110,7 @@ impl RubiksCube {
         } else if rotation_axis == Vec3::Z || rotation_axis == Vec3::NEG_Z {
             self.select_z_layer(z)
         } else {
-            unreachable!("Axis of rotation should only be a unit base vector")
+            unreachable!("Axis of rotation should only be a unit base vector: {rotation_axis}");
         }
     }
 
@@ -222,44 +226,8 @@ fn setup(
     commands.insert_resource(CurrentlyPointedAtSubCubeRayNormal::default());
     commands.insert_resource(CurrentlySelectedSubCube::default());
     commands.insert_resource(CurrentlySelectedSubCubeRayNormal::default());
+    commands.insert_resource(RotationAngle::default());
 }
-
-// fn pointing_at_sub_cube(
-//     cursor_ray: Res<CursorRay>,
-//     mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
-//     mut currently_pointed_at_sub_cube: ResMut<CurrentlyPointedAtSubCube>,
-//     mut currently_pointed_at_sub_cube_normal: ResMut<CurrentlyPointedAtSubCubeRayNormal>,
-// ) {
-//     // check intersections with cubes
-//     let mut closest = f32::MAX;
-//     let mut newly_selected = None;
-//     for (entity, aabb, transform, _material) in query.iter_mut() {
-//         if let Some([hit_near, _hit_far]) = cursor_ray
-//             .0
-//             .intersects_aabb(aabb, &transform.compute_matrix())
-//         {
-//             if hit_near < closest {
-//                 closest = hit_near;
-//                 newly_selected = Some(entity);
-//             }
-//         }
-//     }
-//
-//     // sets intersection normal
-//     if let Some(entity) = newly_selected {
-//         if let Ok((_, aabb, transform, _)) = query.get(entity) {
-//             currently_pointed_at_sub_cube_normal.0 = Some(cursor_ray.0.aabb_plane_normal(
-//                 closest,
-//                 aabb,
-//                 &transform.compute_matrix(),
-//             ));
-//         }
-//     }
-//
-//     if newly_selected != currently_pointed_at_sub_cube.0 {
-//         currently_pointed_at_sub_cube.0 = newly_selected;
-//     }
-// }
 
 fn selecting_sub_cube(
     mouse_input: Res<Input<MouseButton>>,
@@ -286,12 +254,9 @@ fn selecting_sub_cube(
 
         // sets intersection normal
         if let Some(entity) = newly_selected {
-            if let Ok((_, aabb, transform, _)) = query.get(entity) {
-                currently_selected_sub_cube_normal.0 = Some(cursor_ray.0.aabb_plane_normal(
-                    closest,
-                    aabb,
-                    &transform.compute_matrix(),
-                ));
+            if let Ok((_, aabb, _, _)) = query.get(entity) {
+                currently_selected_sub_cube_normal.0 =
+                    Some(cursor_ray.0.aabb_plane_normal(closest, aabb));
             }
         }
 
@@ -308,8 +273,6 @@ fn selecting_sub_cube(
         if let Some(entity) = currently_selected_sub_cube.0 {
             if let Ok((_, _, _, mut sub_cube_material)) = query.get_mut(entity) {
                 *sub_cube_material = sub_cube_materials.not_selected.clone();
-                currently_selected_sub_cube.0 = None;
-                currently_selected_sub_cube_normal.0 = None;
             }
         }
     }
@@ -322,6 +285,7 @@ fn rotate_side(
     cursor_collinear_axis: Res<CursorCollinearAxis>,
     collinear_axis_projection: Res<CollinearAxisProjection>,
     mut sub_cubes: Query<(&SubCube, &mut Transform)>,
+    mut rotation_angle: ResMut<RotationAngle>,
 ) {
     if let Ok(rb) = rubiks_cube.get_single() {
         if let (
@@ -339,17 +303,25 @@ fn rotate_side(
                 RubiksCube::select_axis_and_direction(selected_sub_cube_normal, direction);
             if let Ok(sub_cube) = sub_cubes.get_component::<SubCube>(selected_cube) {
                 let cube_entities = rb.select_rotation_entities(sub_cube.0, rotation_axis);
-                let angle = axis_projection / 100.0;
+                let angle = (axis_projection * 50.0).clamp(-1.0, 1.0) * std::f32::consts::FRAC_PI_2;
+                let diff = angle - rotation_angle.0;
+                rotation_angle.0 = angle;
                 for entity in cube_entities {
                     let (_, mut transform) = sub_cubes
                         .get_mut(entity)
                         .expect("Subcubes in rubiks cube should be in the query");
-                    let rotation = if rotation_axis == Vec3::X || rotation_axis == Vec3::NEG_X {
-                        Quat::from_rotation_x(-angle)
-                    } else if rotation_axis == Vec3::Y || rotation_axis == Vec3::NEG_Y {
-                        Quat::from_rotation_y(angle)
-                    } else if rotation_axis == Vec3::Z || rotation_axis == Vec3::NEG_Z {
-                        Quat::from_rotation_z(angle)
+                    let rotation = if rotation_axis == Vec3::X {
+                        Quat::from_rotation_x(diff)
+                    } else if rotation_axis == Vec3::NEG_X {
+                        Quat::from_rotation_x(-diff)
+                    } else if rotation_axis == Vec3::Y {
+                        Quat::from_rotation_y(diff)
+                    } else if rotation_axis == Vec3::NEG_Y {
+                        Quat::from_rotation_y(-diff)
+                    } else if rotation_axis == Vec3::Z {
+                        Quat::from_rotation_z(diff)
+                    } else if rotation_axis == Vec3::NEG_Z {
+                        Quat::from_rotation_z(-diff)
                     } else {
                         println!("Got weired rotation axis: {rotation_axis}");
                         return;
@@ -357,7 +329,71 @@ fn rotate_side(
                     transform.rotate_around(Vec3::ZERO, rotation);
                 }
             }
+        } else {
+            rotation_angle.0 = 0.0;
         }
+    }
+}
+
+fn stop_rotation(
+    mouse_input: Res<Input<MouseButton>>,
+    rotation_angle: Res<RotationAngle>,
+    mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
+    mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayNormal>,
+    mut cursor_collinear_axis: ResMut<CursorCollinearAxis>,
+    mut collinear_axis_projection: ResMut<CollinearAxisProjection>,
+    mut rubiks_cube: Query<&mut RubiksCube>,
+    mut sub_cubes: Query<(&SubCube, &mut Transform)>,
+) {
+    if mouse_input.just_released(MouseButton::Left) {
+        if let (Ok(mut rb), Some(selected_cube), Some(selected_sub_cube_normal), Some(direction)) = (
+            rubiks_cube.get_single_mut(),
+            currently_selected_sub_cube.0,
+            currently_selected_sub_cube_normal.0,
+            cursor_collinear_axis.0,
+        ) {
+            let (rotation_axis, _) =
+                RubiksCube::select_axis_and_direction(selected_sub_cube_normal, direction);
+            let sub_cube = sub_cubes.get_component::<SubCube>(selected_cube).unwrap();
+            let cube_entities = rb.select_rotation_entities(sub_cube.0, rotation_axis);
+            let angle = if rotation_angle.0.abs() > std::f32::consts::FRAC_PI_4 {
+                let angle = if rotation_angle.0.is_sign_positive() {
+                    std::f32::consts::FRAC_PI_2 - rotation_angle.0
+                } else {
+                    -std::f32::consts::FRAC_PI_2 + rotation_angle.0
+                };
+                rb.rotate(sub_cube.0, selected_sub_cube_normal, direction);
+                angle
+            } else {
+                -rotation_angle.0
+            };
+            for entity in cube_entities {
+                let (_, mut transform) = sub_cubes
+                    .get_mut(entity)
+                    .expect("Subcubes in rubiks cube should be in the query");
+                let rotation = if rotation_axis == Vec3::X {
+                    Quat::from_rotation_x(angle)
+                } else if rotation_axis == Vec3::NEG_X {
+                    Quat::from_rotation_x(-angle)
+                } else if rotation_axis == Vec3::Y {
+                    Quat::from_rotation_y(angle)
+                } else if rotation_axis == Vec3::NEG_Y {
+                    Quat::from_rotation_y(-angle)
+                } else if rotation_axis == Vec3::Z {
+                    Quat::from_rotation_z(angle)
+                } else if rotation_axis == Vec3::NEG_Z {
+                    Quat::from_rotation_z(-angle)
+                } else {
+                    println!("Got weired rotation axis: {rotation_axis}");
+                    return;
+                };
+                transform.rotate_around(Vec3::ZERO, rotation);
+            }
+        }
+        currently_selected_sub_cube.0 = None;
+        currently_selected_sub_cube_normal.0 = None;
+        cursor_collinear_axis.0 = None;
+        collinear_axis_projection.0 = None;
     }
 }
 
