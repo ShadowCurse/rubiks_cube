@@ -3,12 +3,13 @@ use bevy::prelude::*;
 
 mod camera;
 mod cursor;
-mod ray;
+mod ray_extension;
 mod rubiks_cube;
+mod rubiks_cube_plugin;
 
 use camera::{CameraController, CameraControllerPlugin};
 use cursor::CursorRayPlugin;
-use rubiks_cube::RubiksCubePlugin;
+use rubiks_cube_plugin::RubiksCubePlugin;
 
 fn main() {
     let mut app = App::new();
@@ -27,7 +28,7 @@ fn main() {
 
 fn setup(mut commands: Commands) {
     // light
-    commands.spawn_bundle(PointLightBundle {
+    commands.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 1500.0,
             shadows_enabled: true,
@@ -38,7 +39,7 @@ fn setup(mut commands: Commands) {
     });
     // camera
     commands
-        .spawn_bundle(Camera3dBundle {
+        .spawn(Camera3dBundle {
             transform: Transform::from_xyz(0.0, 0.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         })
