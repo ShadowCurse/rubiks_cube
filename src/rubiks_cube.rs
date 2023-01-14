@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use bevy::prelude::{Component, Entity, Vec3};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Rotation {
     Cw,
     Ccw,
@@ -19,10 +19,10 @@ pub struct RubiksCube {
 
 impl RubiksCube {
     pub fn rotate(&mut self, cube_id: usize, cube_normal: Vec3, direction: Vec3) {
-        let (axis, direction) = Self::select_axis_and_direction(cube_normal, direction);
+        let (axis, rotation) = Self::select_axis_and_rotation(cube_normal, direction);
 
         let selection = self.select_rotation(cube_id, axis);
-        let rotated = self.rotate_indices(&selection, direction);
+        let rotated = self.rotate_indices(&selection, rotation);
 
         let mut pos_to_cube_new = self.pos_to_cube.clone();
         let mut cube_to_pos_new = self.cube_to_pos.clone();
@@ -75,7 +75,7 @@ impl RubiksCube {
         }
     }
 
-    pub fn select_axis_and_direction(normal: Vec3, direction: Vec3) -> (Vec3, Rotation) {
+    pub fn select_axis_and_rotation(normal: Vec3, direction: Vec3) -> (Vec3, Rotation) {
         let cross = normal.cross(direction);
         if cross.x.is_sign_negative() || cross.y.is_sign_negative() || cross.z.is_sign_negative() {
             (cross, Rotation::Cw)
@@ -122,6 +122,17 @@ impl RubiksCube {
 
 impl Display for RubiksCube {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "--->z")?;
+        writeln!(f, "|")?;
+        writeln!(f, "|")?;
+        writeln!(f, "|")?;
+        writeln!(f, "\u{2193}")?;
+        writeln!(f, "y")?;
+        writeln!(f, "|")?;
+        writeln!(f, "|")?;
+        writeln!(f, "|")?;
+        writeln!(f, "\u{2193}")?;
+        writeln!(f, "x")?;
         for x in 0..self.side_size {
             for y in 0..self.side_size {
                 for z in 0..self.side_size {
@@ -159,7 +170,112 @@ mod tests {
     }
 
     #[test]
-    fn rb_rotate() {
+    fn rb_select_axis_and_rotation() {
+        // X
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::X, Vec3::Y);
+        assert_eq!(axis, Vec3::Z);
+        assert_eq!(rotation, Rotation::Ccw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::X, Vec3::NEG_Y);
+        assert_eq!(axis, Vec3::NEG_Z);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::X, Vec3::Z);
+        assert_eq!(axis, Vec3::NEG_Y);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::X, Vec3::NEG_Z);
+        assert_eq!(axis, Vec3::Y);
+        assert_eq!(rotation, Rotation::Cw);
+
+        // NEG_X
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_X, Vec3::Y);
+        assert_eq!(axis, Vec3::NEG_Z);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_X, Vec3::NEG_Y);
+        assert_eq!(axis, Vec3::Z);
+        assert_eq!(rotation, Rotation::Ccw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_X, Vec3::Z);
+        assert_eq!(axis, Vec3::Y);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_X, Vec3::NEG_Z);
+        assert_eq!(axis, Vec3::NEG_Y);
+        assert_eq!(rotation, Rotation::Cw);
+
+        // Y
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::Y, Vec3::X);
+        assert_eq!(axis, Vec3::NEG_Z);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::Y, Vec3::NEG_X);
+        assert_eq!(axis, Vec3::Z);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::Y, Vec3::Z);
+        assert_eq!(axis, Vec3::X);
+        assert_eq!(rotation, Rotation::Ccw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::Y, Vec3::NEG_Z);
+        assert_eq!(axis, Vec3::NEG_X);
+        assert_eq!(rotation, Rotation::Cw);
+
+        // NEG_Y
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_Y, Vec3::X);
+        assert_eq!(axis, Vec3::Z);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_Y, Vec3::NEG_X);
+        assert_eq!(axis, Vec3::NEG_Z);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_Y, Vec3::Z);
+        assert_eq!(axis, Vec3::NEG_X);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_Y, Vec3::NEG_Z);
+        assert_eq!(axis, Vec3::X);
+        assert_eq!(rotation, Rotation::Ccw);
+
+        // Z
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::Z, Vec3::X);
+        assert_eq!(axis, Vec3::Y);
+        assert_eq!(rotation, Rotation::Ccw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::Z, Vec3::NEG_X);
+        assert_eq!(axis, Vec3::NEG_Y);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::Z, Vec3::Y);
+        assert_eq!(axis, Vec3::NEG_X);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::Z, Vec3::NEG_Y);
+        assert_eq!(axis, Vec3::X);
+        assert_eq!(rotation, Rotation::Cw);
+
+        // NEG_Z
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_Z, Vec3::X);
+        assert_eq!(axis, Vec3::NEG_Y);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_Z, Vec3::NEG_X);
+        assert_eq!(axis, Vec3::Y);
+        assert_eq!(rotation, Rotation::Ccw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_Z, Vec3::Y);
+        assert_eq!(axis, Vec3::X);
+        assert_eq!(rotation, Rotation::Cw);
+
+        let (axis, rotation) = RubiksCube::select_axis_and_rotation(Vec3::NEG_Z, Vec3::NEG_Y);
+        assert_eq!(axis, Vec3::NEG_X);
+        assert_eq!(rotation, Rotation::Cw);
+    }
+
+    #[test]
+    fn rb_rotate_single() {
         let mut rb = generate_rb(3);
         rb.rotate(0, Vec3::NEG_Y, Vec3::Z);
         let expected_cubes_pos = vec![
@@ -187,6 +303,30 @@ mod tests {
         let expected_cubes_pos = vec![
             18, 1, 2, 9, 4, 5, 0, 7, 8, 21, 10, 11, 12, 13, 14, 3, 16, 17, 24, 19, 20, 15, 22, 23,
             6, 25, 26,
+        ]
+        .into_iter()
+        .map(|c| (Entity::from_raw(c), c as usize))
+        .collect::<Vec<_>>();
+        assert_eq!(rb.pos_to_cube, expected_cubes_pos);
+    }
+
+    #[test]
+    fn rb_rotate_multiple() {
+        let mut rb = generate_rb(3);
+        rb.rotate(0, Vec3::NEG_Y, Vec3::Z);
+        let expected_cubes_pos = vec![
+            6, 3, 0, 7, 4, 1, 8, 5, 2, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26,
+        ]
+        .into_iter()
+        .map(|c| (Entity::from_raw(c), c as usize))
+        .collect::<Vec<_>>();
+        assert_eq!(rb.pos_to_cube, expected_cubes_pos);
+
+        rb.rotate(6, Vec3::NEG_X, Vec3::Z);
+        let expected_cubes_pos = vec![
+            18, 9, 6, 7, 4, 1, 8, 5, 2, 19, 10, 3, 12, 13, 14, 15, 16, 17, 20, 11, 0, 21, 22, 23,
+            24, 25, 26,
         ]
         .into_iter()
         .map(|c| (Entity::from_raw(c), c as usize))

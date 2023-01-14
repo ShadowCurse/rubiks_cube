@@ -196,7 +196,7 @@ fn rotate_side(
             collinear_axis_projection.0,
         ) {
             let (rotation_axis, _) =
-                RubiksCube::select_axis_and_direction(selected_sub_cube_normal, direction);
+                RubiksCube::select_axis_and_rotation(selected_sub_cube_normal, direction);
             if let Ok(sub_cube) = sub_cubes.get_component::<SubCube>(selected_cube) {
                 let cube_entities = rb.select_rotation_entities(sub_cube.0, rotation_axis);
                 let angle = (axis_projection * 50.0).clamp(-1.0, 1.0) * std::f32::consts::FRAC_PI_2;
@@ -249,7 +249,7 @@ fn stop_rotation(
             cursor_collinear_axis.0,
         ) {
             let (rotation_axis, _) =
-                RubiksCube::select_axis_and_direction(selected_sub_cube_normal, direction);
+                RubiksCube::select_axis_and_rotation(selected_sub_cube_normal, direction);
             let sub_cube = sub_cubes.get_component::<SubCube>(selected_cube).unwrap();
             let cube_entities = rb.select_rotation_entities(sub_cube.0, rotation_axis);
             let angle = if rotation_angle.0.abs() > std::f32::consts::FRAC_PI_4 {
