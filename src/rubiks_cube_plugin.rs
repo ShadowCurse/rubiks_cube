@@ -2,7 +2,8 @@ use bevy::{prelude::*, render::primitives::Aabb};
 
 use crate::{
     cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay},
-    ray_extension::RayExtension, rubiks_cube::RubiksCube,
+    ray_extension::RayExtension,
+    rubiks_cube::{Rotation, RubiksCube},
 };
 
 const CUBE_SIDES: u32 = 3;
@@ -195,11 +196,15 @@ fn rotate_side(
             cursor_collinear_axis.0,
             collinear_axis_projection.0,
         ) {
-            let (rotation_axis, _) =
+            let (rotation_axis, rotation) =
                 RubiksCube::select_axis_and_rotation(selected_sub_cube_normal, direction);
             if let Ok(sub_cube) = sub_cubes.get_component::<SubCube>(selected_cube) {
                 let cube_entities = rb.select_rotation_entities(sub_cube.0, rotation_axis);
-                let angle = (axis_projection * 50.0).clamp(-1.0, 1.0) * std::f32::consts::FRAC_PI_2;
+                let mut angle =
+                    (axis_projection * 50.0).clamp(-1.0, 1.0) * std::f32::consts::FRAC_PI_2;
+                if rotation == Rotation::Cw {
+                    angle *= -1.0;
+                }
                 let diff = angle - rotation_angle.0;
                 rotation_angle.0 = angle;
                 for entity in cube_entities {
@@ -208,16 +213,10 @@ fn rotate_side(
                         .expect("Subcubes in rubiks cube should be in the query");
                     let rotation = if rotation_axis == Vec3::X {
                         Quat::from_rotation_x(diff)
-                    } else if rotation_axis == Vec3::NEG_X {
-                        Quat::from_rotation_x(-diff)
                     } else if rotation_axis == Vec3::Y {
                         Quat::from_rotation_y(diff)
-                    } else if rotation_axis == Vec3::NEG_Y {
-                        Quat::from_rotation_y(-diff)
                     } else if rotation_axis == Vec3::Z {
                         Quat::from_rotation_z(diff)
-                    } else if rotation_axis == Vec3::NEG_Z {
-                        Quat::from_rotation_z(-diff)
                     } else {
                         println!("Got weired rotation axis: {rotation_axis}");
                         return;
@@ -253,10 +252,11 @@ fn stop_rotation(
             let sub_cube = sub_cubes.get_component::<SubCube>(selected_cube).unwrap();
             let cube_entities = rb.select_rotation_entities(sub_cube.0, rotation_axis);
             let angle = if rotation_angle.0.abs() > std::f32::consts::FRAC_PI_4 {
+                // calculationg the remaining angle to rotate the layer
                 let angle = if rotation_angle.0.is_sign_positive() {
                     std::f32::consts::FRAC_PI_2 - rotation_angle.0
                 } else {
-                    -std::f32::consts::FRAC_PI_2 + rotation_angle.0
+                    -std::f32::consts::FRAC_PI_2 - rotation_angle.0
                 };
                 rb.rotate(sub_cube.0, selected_sub_cube_normal, direction);
                 angle
