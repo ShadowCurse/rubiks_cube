@@ -38,7 +38,7 @@ struct CurrentlyPointedAtSubCubeRayNormal(Option<Vec3>);
 struct CurrentlySelectedSubCube(Option<Entity>);
 
 #[derive(Resource, Debug, Default, Clone, Copy)]
-struct CurrentlySelectedSubCubeRayNormal(Option<Vec3>);
+pub struct CurrentlySelectedSubCubeRayNormal(pub Option<Vec3>);
 
 #[derive(Resource, Debug, Default, Clone, Copy)]
 struct RotationAngle(f32);

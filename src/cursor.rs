@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::rubiks_cube_plugin::CurrentlySelectedSubCubeRayNormal;
+
 pub struct CursorRayPlugin;
 
 impl Plugin for CursorRayPlugin {
@@ -86,49 +88,56 @@ fn cursor_selection_vector(
     }
 }
 
+// selecte the axis that is collinear to the cursor crs_vector
+// excludes the axis that is the same as the normal
 fn selection_vector_colliniar_axis(
     crs_vector: Res<CursorSelectionVector>,
     camera: Query<(&Camera, &GlobalTransform)>,
+    currently_selected_sub_cube_normal: Res<CurrentlySelectedSubCubeRayNormal>,
     mut crs_colliniar_axis: ResMut<CursorCollinearAxis>,
 ) {
-    if let Ok((camera, camera_transform)) = camera.get_single() {
-        if let (Some(vec), None) = (crs_vector.0, crs_colliniar_axis.0) {
-            if let (Some(ray_start), Some(ray_end)) = (
-                camera.viewport_to_world(camera_transform, vec.start),
-                camera.viewport_to_world(camera_transform, vec.end),
-            ) {
-                let vec = ray_end.origin - ray_start.origin;
-                // have some room for the mouse
-                if vec.length_squared() < 1e-8 {
-                    return;
-                }
-
-                let vec = vec.normalize();
-                let x_collinearity = vec.dot(Vec3::X);
-                let y_collinearity = vec.dot(Vec3::Y);
-                let z_collinearity = vec.dot(Vec3::Z);
-
-                let (colliniarity, axis, neg_axis) = [
-                    (x_collinearity, Vec3::X, Vec3::NEG_X),
-                    (y_collinearity, Vec3::Y, Vec3::NEG_Y),
-                    (z_collinearity, Vec3::Z, Vec3::NEG_Z),
-                ]
-                .into_iter()
-                .max_by(|(c1, _, _), (c2, _, _)| {
-                    c1.abs()
-                        .partial_cmp(&c2.abs())
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .unwrap();
-                let axis = if colliniarity.is_sign_positive() {
-                    axis
-                } else {
-                    neg_axis
-                };
-                crs_colliniar_axis.0 = Some(axis);
-            } else {
-                crs_colliniar_axis.0 = None;
+    if let (Ok((camera, camera_transform)), Some(normal), Some(vec), None) = (
+        camera.get_single(),
+        currently_selected_sub_cube_normal.0,
+        crs_vector.0,
+        crs_colliniar_axis.0,
+    ) {
+        if let (Some(ray_start), Some(ray_end)) = (
+            camera.viewport_to_world(camera_transform, vec.start),
+            camera.viewport_to_world(camera_transform, vec.end),
+        ) {
+            let vec = ray_end.origin - ray_start.origin;
+            // have some room for the mouse
+            if vec.length_squared() < 1e-8 {
+                return;
             }
+
+            let vec = vec.normalize();
+            let x_collinearity = vec.dot(Vec3::X);
+            let y_collinearity = vec.dot(Vec3::Y);
+            let z_collinearity = vec.dot(Vec3::Z);
+
+            let (colliniarity, axis, neg_axis) = [
+                (x_collinearity, Vec3::X, Vec3::NEG_X),
+                (y_collinearity, Vec3::Y, Vec3::NEG_Y),
+                (z_collinearity, Vec3::Z, Vec3::NEG_Z),
+            ]
+            .into_iter()
+            .filter(|(_, axis, neg_axis)| axis != &normal && neg_axis != &normal)
+            .max_by(|(c1, _, _), (c2, _, _)| {
+                c1.abs()
+                    .partial_cmp(&c2.abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap();
+            let axis = if colliniarity.is_sign_positive() {
+                axis
+            } else {
+                neg_axis
+            };
+            crs_colliniar_axis.0 = Some(axis);
+        } else {
+            crs_colliniar_axis.0 = None;
         }
     }
 }
