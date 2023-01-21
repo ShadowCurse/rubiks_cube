@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-// use bevy_editor_pls::prelude::*;
 
 mod camera;
 mod cursor;
@@ -7,7 +6,7 @@ mod ray_extension;
 mod rubiks_cube;
 mod rubiks_cube_plugin;
 
-use camera::{CameraController, CameraControllerPlugin};
+use camera::{CameraControllerPlugin, OrbitCamera};
 use cursor::CursorRayPlugin;
 use rubiks_cube_plugin::RubiksCubePlugin;
 
@@ -15,7 +14,6 @@ fn main() {
     let mut app = App::new();
 
     app.add_plugins(DefaultPlugins);
-    // app.add_plugin(EditorPlugin);
 
     app.add_plugin(CameraControllerPlugin);
     app.add_plugin(CursorRayPlugin);
@@ -43,5 +41,8 @@ fn setup(mut commands: Commands) {
             transform: Transform::from_xyz(0.0, 0.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         })
-        .insert(CameraController::default());
+        .insert(OrbitCamera {
+            radius: 1.0,
+            ..Default::default()
+        });
 }
