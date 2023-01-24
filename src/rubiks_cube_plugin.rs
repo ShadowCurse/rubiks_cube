@@ -1,6 +1,7 @@
 use bevy::{prelude::*, render::primitives::Aabb};
 
 use crate::{
+    cube_material::CubeMaterial,
     cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay},
     ray_extension::RayExtension,
     rubiks_cube::{Rotation, RubiksCube},
@@ -8,7 +9,7 @@ use crate::{
 
 const CUBE_SIDES: u32 = 3;
 const CUBE_SIDE_SIZE: f32 = 0.1;
-const CUBE_SPACING: f32 = 0.11;
+const CUBE_SPACING: f32 = 0.101;
 
 pub struct RubiksCubePlugin;
 
@@ -19,13 +20,6 @@ impl Plugin for RubiksCubePlugin {
         app.add_system(rotate_side);
         app.add_system(stop_rotation);
     }
-}
-
-#[derive(Resource, Debug, Default)]
-struct SubCubeMaterials {
-    selected: Handle<StandardMaterial>,
-    pointed: Handle<StandardMaterial>,
-    not_selected: Handle<StandardMaterial>,
 }
 
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -49,14 +43,12 @@ struct SubCube(usize);
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut cube_materials: ResMut<Assets<CubeMaterial>>,
 ) {
     let sub_cube_mesh = meshes.add(Mesh::from(shape::Cube {
         size: CUBE_SIDE_SIZE,
     }));
-    let sub_cube_selected_material = materials.add(Color::ORANGE.into());
-    let sub_cube_pointed_material = materials.add(Color::GREEN.into());
-    let sub_cube_not_selected_material = materials.add(Color::WHITE.into());
+    let material = cube_materials.add(CubeMaterial::default());
     let mut pos_to_cube = Vec::new();
     commands
         .spawn((
@@ -79,20 +71,10 @@ fn setup(
                         // so this index can be used as just id of a cube
                         // and as a mapping to the position of the qube
                         let index = RubiksCube::corrds_to_pos(CUBE_SIDES, x, y, z);
-                        let material = materials.add(
-                            Color::Rgba {
-                                red: index as f32 / CUBE_SIDES.pow(3) as f32,
-                                green: index as f32 / CUBE_SIDES.pow(3) as f32,
-                                blue: index as f32 / CUBE_SIDES.pow(3) as f32,
-                                alpha: 1.0,
-                            }
-                            .into(),
-                        );
                         let entity = builder
-                            .spawn(PbrBundle {
+                            .spawn(MaterialMeshBundle::<CubeMaterial> {
                                 mesh: sub_cube_mesh.clone(),
-                                // material: sub_cube_not_selected_material.clone(),
-                                material,
+                                material: material.clone(),
                                 transform: Transform::from_xyz(
                                     offset + x as f32 * CUBE_SPACING,
                                     offset + y as f32 * CUBE_SPACING,
@@ -113,12 +95,6 @@ fn setup(
             cube_to_pos: (0..CUBE_SIDES.pow(3)).collect(),
         });
 
-    commands.insert_resource(SubCubeMaterials {
-        selected: sub_cube_selected_material,
-        pointed: sub_cube_pointed_material,
-        not_selected: sub_cube_not_selected_material,
-    });
-
     commands.insert_resource(CurrentlyPointedAtSubCube::default());
     commands.insert_resource(CurrentlyPointedAtSubCubeRayNormal::default());
     commands.insert_resource(CurrentlySelectedSubCube::default());
@@ -129,8 +105,7 @@ fn setup(
 fn selecting_sub_cube(
     mouse_input: Res<Input<MouseButton>>,
     cursor_ray: Res<CursorRay>,
-    sub_cube_materials: Res<SubCubeMaterials>,
-    mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<StandardMaterial>), With<SubCube>>,
+    mut query: Query<(Entity, &Aabb, &Transform, &mut Handle<CubeMaterial>), With<SubCube>>,
     mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
     mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayNormal>,
 ) {
@@ -158,20 +133,6 @@ fn selecting_sub_cube(
         }
 
         currently_selected_sub_cube.0 = newly_selected;
-
-        // color selected cube
-        if let Some(entity) = currently_selected_sub_cube.0 {
-            if let Ok(mut material) = query.get_component_mut::<Handle<StandardMaterial>>(entity) {
-                *material = sub_cube_materials.selected.clone();
-            }
-        }
-    } else if mouse_input.just_released(MouseButton::Left) {
-        // remove color from perviously selected cube
-        if let Some(entity) = currently_selected_sub_cube.0 {
-            if let Ok((_, _, _, mut sub_cube_material)) = query.get_mut(entity) {
-                *sub_cube_material = sub_cube_materials.not_selected.clone();
-            }
-        }
     }
 }
 

@@ -1,12 +1,14 @@
 use bevy::prelude::*;
 
 mod camera;
+mod cube_material;
 mod cursor;
 mod ray_extension;
 mod rubiks_cube;
 mod rubiks_cube_plugin;
 
 use camera::{CameraControllerPlugin, OrbitCamera};
+use cube_material::CubeMaterial;
 use cursor::CursorRayPlugin;
 use rubiks_cube_plugin::RubiksCubePlugin;
 
@@ -14,6 +16,8 @@ fn main() {
     let mut app = App::new();
 
     app.add_plugins(DefaultPlugins);
+
+    app.add_plugin(MaterialPlugin::<CubeMaterial>::default());
 
     app.add_plugin(CameraControllerPlugin);
     app.add_plugin(CursorRayPlugin);
