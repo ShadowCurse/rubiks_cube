@@ -15,6 +15,8 @@ use rubiks_cube_plugin::RubiksCubePlugin;
 fn main() {
     let mut app = App::new();
 
+    app.insert_resource(ClearColor(Color::BLACK));
+
     app.add_plugins(DefaultPlugins);
 
     app.add_plugin(MaterialPlugin::<CubeMaterial>::default());
@@ -36,13 +38,13 @@ fn setup(mut commands: Commands) {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        transform: Transform::from_xyz(2.0, 4.0, 2.0),
         ..default()
     });
     // camera
     commands
         .spawn(Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 0.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(0.5, 0.2, 1.0).looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         })
         .insert(OrbitCamera {
