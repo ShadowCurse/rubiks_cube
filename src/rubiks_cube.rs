@@ -18,6 +18,10 @@ pub struct RubiksCube {
 }
 
 impl RubiksCube {
+    pub fn is_solved(&self) -> bool {
+        self.pos_to_cube.is_sorted_by_key(|(_, i)| i)
+    }
+
     pub fn rotate(&mut self, cube_id: usize, cube_normal: Vec3, direction: Vec3) {
         let (axis, rotation) = Self::select_axis_and_rotation(cube_normal, direction);
 
