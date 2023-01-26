@@ -9,7 +9,7 @@ use crate::{
 
 const CUBE_SIDES: u32 = 3;
 const CUBE_SIDE_SIZE: f32 = 0.1;
-const CUBE_SPACING: f32 = 0.101;
+const CUBE_SPACING: f32 = 0.105;
 
 pub struct RubiksCubePlugin;
 
@@ -17,8 +17,8 @@ impl Plugin for RubiksCubePlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(setup);
         app.add_system(selecting_sub_cube);
-        app.add_system(rotate_side);
-        app.add_system(stop_rotation);
+        app.add_system(rotate_side.after(selecting_sub_cube));
+        app.add_system(stop_rotation.after(rotate_side));
     }
 }
 
@@ -48,7 +48,6 @@ fn setup(
     let sub_cube_mesh = meshes.add(Mesh::from(shape::Cube {
         size: CUBE_SIDE_SIZE,
     }));
-    let material = cube_materials.add(CubeMaterial::default());
     let mut pos_to_cube = Vec::new();
     commands
         .spawn((
@@ -71,6 +70,18 @@ fn setup(
                         // so this index can be used as just id of a cube
                         // and as a mapping to the position of the qube
                         let index = RubiksCube::corrds_to_pos(CUBE_SIDES, x, y, z);
+                        let material = cube_materials.add(CubeMaterial {
+                            colors: [
+                                if z != 0 { Color::BLACK } else { Color::WHITE },
+                                if y != 0 { Color::BLACK } else { Color::BLUE },
+                                if x != 0 { Color::BLACK } else { Color::rgb(1.0, 0.35, 0.0) },
+                                Color::NONE,
+                                if x != CUBE_SIDES - 1 { Color::BLACK } else { Color::RED },
+                                if y != CUBE_SIDES - 1 { Color::BLACK } else { Color::GREEN },
+                                if z != CUBE_SIDES - 1 { Color::BLACK } else { Color::YELLOW },
+                            ],
+                            ..default()
+                        });
                         let entity = builder
                             .spawn(MaterialMeshBundle::<CubeMaterial> {
                                 mesh: sub_cube_mesh.clone(),
