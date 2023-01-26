@@ -22,9 +22,9 @@ impl Default for CubeMaterial {
     fn default() -> Self {
         Self {
             emissive: Color::BLACK,
-            perceptual_roughness: 0.089,
+            perceptual_roughness: 0.69,
             metallic: 0.001,
-            reflectance: 0.5,
+            reflectance: 0.01,
             colors: [
                 Color::RED,
                 Color::GREEN,

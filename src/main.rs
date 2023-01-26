@@ -1,3 +1,4 @@
+#![feature(is_sorted)]
 use bevy::prelude::*;
 
 mod camera;
@@ -16,6 +17,7 @@ fn main() {
     let mut app = App::new();
 
     app.insert_resource(ClearColor(Color::BLACK));
+    app.insert_resource(AmbientLight { color: Color::WHITE, brightness: 0.4 });
 
     app.add_plugins(DefaultPlugins);
 
