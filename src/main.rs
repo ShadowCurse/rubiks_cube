@@ -1,6 +1,7 @@
 #![feature(is_sorted)]
 use bevy::prelude::*;
 
+mod ui;
 mod camera;
 mod cube_material;
 mod cursor;
@@ -8,10 +9,19 @@ mod ray_extension;
 mod rubiks_cube;
 mod rubiks_cube_plugin;
 
+use ui::UiPlugin;
 use camera::{CameraControllerPlugin, OrbitCamera};
 use cube_material::CubeMaterial;
 use cursor::CursorRayPlugin;
 use rubiks_cube_plugin::RubiksCubePlugin;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GameState {
+    MainMenu,
+    InGame,
+    Paused,
+    EndGame,
+}
 
 fn main() {
     let mut app = App::new();
@@ -20,9 +30,11 @@ fn main() {
     app.insert_resource(AmbientLight { color: Color::WHITE, brightness: 0.4 });
 
     app.add_plugins(DefaultPlugins);
-
     app.add_plugin(MaterialPlugin::<CubeMaterial>::default());
 
+    app.add_state(GameState::MainMenu);
+
+    app.add_plugin(UiPlugin);
     app.add_plugin(CameraControllerPlugin);
     app.add_plugin(CursorRayPlugin);
     app.add_plugin(RubiksCubePlugin);

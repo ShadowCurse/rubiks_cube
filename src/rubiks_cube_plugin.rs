@@ -5,6 +5,7 @@ use crate::{
     cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay},
     ray_extension::RayExtension,
     rubiks_cube::{Rotation, RubiksCube},
+    GameState,
 };
 
 const CUBE_SIDES: u32 = 3;
@@ -15,10 +16,14 @@ pub struct RubiksCubePlugin;
 
 impl Plugin for RubiksCubePlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup);
-        app.add_system(selecting_sub_cube);
-        app.add_system(rotate_side.after(selecting_sub_cube));
-        app.add_system(stop_rotation.after(rotate_side));
+        app.add_system_set(SystemSet::on_enter(GameState::InGame).with_system(init_rubiks_cube));
+        app.add_system_set(
+            SystemSet::on_update(GameState::InGame)
+                .with_system(selecting_sub_cube)
+                .with_system(rotate_side.after(selecting_sub_cube))
+                .with_system(stop_rotation.after(rotate_side)),
+        );
+        app.add_system_set(SystemSet::on_exit(GameState::InGame).with_system(init_rubiks_cube));
     }
 }
 
@@ -40,7 +45,7 @@ struct RotationAngle(f32);
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct SubCube(usize);
 
-fn setup(
+fn init_rubiks_cube(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut cube_materials: ResMut<Assets<CubeMaterial>>,
@@ -74,11 +79,27 @@ fn setup(
                             colors: [
                                 if z != 0 { Color::BLACK } else { Color::WHITE },
                                 if y != 0 { Color::BLACK } else { Color::BLUE },
-                                if x != 0 { Color::BLACK } else { Color::rgb(1.0, 0.35, 0.0) },
+                                if x != 0 {
+                                    Color::BLACK
+                                } else {
+                                    Color::rgb(1.0, 0.35, 0.0)
+                                },
                                 Color::NONE,
-                                if x != CUBE_SIDES - 1 { Color::BLACK } else { Color::RED },
-                                if y != CUBE_SIDES - 1 { Color::BLACK } else { Color::GREEN },
-                                if z != CUBE_SIDES - 1 { Color::BLACK } else { Color::YELLOW },
+                                if x != CUBE_SIDES - 1 {
+                                    Color::BLACK
+                                } else {
+                                    Color::RED
+                                },
+                                if y != CUBE_SIDES - 1 {
+                                    Color::BLACK
+                                } else {
+                                    Color::GREEN
+                                },
+                                if z != CUBE_SIDES - 1 {
+                                    Color::BLACK
+                                } else {
+                                    Color::YELLOW
+                                },
                             ],
                             ..default()
                         });
@@ -111,6 +132,19 @@ fn setup(
     commands.insert_resource(CurrentlySelectedSubCube::default());
     commands.insert_resource(CurrentlySelectedSubCubeRayNormal::default());
     commands.insert_resource(RotationAngle::default());
+}
+
+fn clean_rb(
+    query: Query<(Entity, &Handle<Mesh>, &Handle<CubeMaterial>), With<SubCube>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<CubeMaterial>>,
+) {
+    for (entity, mesh, material) in query.iter() {
+        commands.entity(entity).despawn();
+        meshes.remove(mesh);
+        materials.remove(material);
+    }
 }
 
 fn selecting_sub_cube(
