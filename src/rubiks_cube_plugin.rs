@@ -5,7 +5,7 @@ use crate::{
     cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay},
     ray_extension::RayExtension,
     rubiks_cube::{Rotation, RubiksCube},
-    GameState,
+    GameStates,
 };
 
 const CUBE_SIDES: u32 = 3;
@@ -16,14 +16,14 @@ pub struct RubiksCubePlugin;
 
 impl Plugin for RubiksCubePlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_set(SystemSet::on_enter(GameState::InGame).with_system(init_rubiks_cube));
+        app.add_system_set(SystemSet::on_enter(GameStates::InGame).with_system(init_rb));
         app.add_system_set(
-            SystemSet::on_update(GameState::InGame)
+            SystemSet::on_update(GameStates::InGame)
                 .with_system(selecting_sub_cube)
                 .with_system(rotate_side.after(selecting_sub_cube))
                 .with_system(stop_rotation.after(rotate_side)),
         );
-        app.add_system_set(SystemSet::on_exit(GameState::InGame).with_system(init_rubiks_cube));
+        app.add_system_set(SystemSet::on_exit(GameStates::InGame).with_system(clean_rb));
     }
 }
 
@@ -45,7 +45,7 @@ struct RotationAngle(f32);
 #[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct SubCube(usize);
 
-fn init_rubiks_cube(
+fn init_rb(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut cube_materials: ResMut<Assets<CubeMaterial>>,
@@ -135,16 +135,27 @@ fn init_rubiks_cube(
 }
 
 fn clean_rb(
-    query: Query<(Entity, &Handle<Mesh>, &Handle<CubeMaterial>), With<SubCube>>,
+    rb_query: Query<Entity, With<RubiksCube>>,
+    sub_qubes_query: Query<(Entity, &Handle<Mesh>, &Handle<CubeMaterial>), With<SubCube>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<CubeMaterial>>,
 ) {
-    for (entity, mesh, material) in query.iter() {
+    for (entity, mesh, material) in sub_qubes_query.iter() {
         commands.entity(entity).despawn();
         meshes.remove(mesh);
         materials.remove(material);
     }
+
+    for entity in rb_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    commands.remove_resource::<CurrentlyPointedAtSubCube>();
+    commands.remove_resource::<CurrentlyPointedAtSubCubeRayNormal>();
+    commands.remove_resource::<CurrentlySelectedSubCube>();
+    commands.remove_resource::<CurrentlySelectedSubCubeRayNormal>();
+    commands.remove_resource::<RotationAngle>();
 }
 
 fn selecting_sub_cube(

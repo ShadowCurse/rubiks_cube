@@ -1,19 +1,20 @@
 use bevy::prelude::*;
 
-use crate::rubiks_cube_plugin::CurrentlySelectedSubCubeRayNormal;
+use crate::{rubiks_cube_plugin::CurrentlySelectedSubCubeRayNormal, GameStates};
 
 pub struct CursorRayPlugin;
 
 impl Plugin for CursorRayPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(init);
-        app.add_system(world_cursor_system);
-        app.add_system(cursor_selection_vector);
-        app.add_system(selection_vector_colliniar_axis);
-        app.add_system(projection_on_collinear_axis);
-
-        app.add_startup_system(debug_axis);
-        // app.add_system(debug_ray);
+        app.add_system_set(SystemSet::on_enter(GameStates::InGame).with_system(init));
+        app.add_system_set(
+            SystemSet::on_update(GameStates::InGame)
+                .with_system(world_cursor_system)
+                .with_system(cursor_selection_vector)
+                .with_system(selection_vector_colliniar_axis)
+                .with_system(projection_on_collinear_axis),
+        );
+        app.add_system_set(SystemSet::on_exit(GameStates::InGame).with_system(deinit));
     }
 }
 
@@ -40,6 +41,13 @@ fn init(mut commands: Commands) {
     commands.insert_resource(CursorSelectionVector::default());
     commands.insert_resource(CursorCollinearAxis::default());
     commands.insert_resource(CollinearAxisProjection::default());
+}
+
+fn deinit(mut commands: Commands) {
+    commands.remove_resource::<CursorRay>();
+    commands.remove_resource::<CursorSelectionVector>();
+    commands.remove_resource::<CursorCollinearAxis>();
+    commands.remove_resource::<CollinearAxisProjection>();
 }
 
 fn world_cursor_system(
@@ -164,68 +172,29 @@ fn projection_on_collinear_axis(
     }
 }
 
-fn debug_axis(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let mesh = meshes.add(
-        shape::UVSphere {
-            radius: 0.005,
-            ..default()
-        }
-        .into(),
-    );
-    for (axis, color) in [
-        (Vec3::X, Color::RED),
-        (Vec3::Y, Color::GREEN),
-        (Vec3::Z, Color::BLUE),
-    ] {
-        let material = materials.add(color.into());
-        for i in 1..50 {
-            commands.spawn(PbrBundle {
-                mesh: mesh.clone(),
-                material: material.clone(),
-                transform: Transform::from_translation(axis * i as f32 * 0.05),
-                ..default()
-            });
-        }
-    }
-}
-
-// fn debug_ray(
-//     crs: Res<CursorRay>,
-//     key_input: Res<Input<KeyCode>>,
+// fn debug_axis(
 //     mut commands: Commands,
 //     mut meshes: ResMut<Assets<Mesh>>,
 //     mut materials: ResMut<Assets<StandardMaterial>>,
 // ) {
-//     if key_input.pressed(KeyCode::Space) {
-//         commands.spawn_bundle(PbrBundle {
-//             mesh: meshes.add(
-//                 shape::UVSphere {
-//                     radius: 0.01,
-//                     ..default()
-//                 }
-//                 .into(),
-//             ),
-//             material: materials.add(Color::RED.into()),
-//             transform: Transform::from_translation(crs.origin.into()),
+//     let mesh = meshes.add(
+//         shape::UVSphere {
+//             radius: 0.005,
 //             ..default()
-//         });
+//         }
+//         .into(),
+//     );
+//     for (axis, color) in [
+//         (Vec3::X, Color::RED),
+//         (Vec3::Y, Color::GREEN),
+//         (Vec3::Z, Color::BLUE),
+//     ] {
+//         let material = materials.add(color.into());
 //         for i in 1..50 {
-//             commands.spawn_bundle(PbrBundle {
-//                 mesh: meshes.add(
-//                     shape::UVSphere {
-//                         radius: 0.005,
-//                         ..default()
-//                     }
-//                     .into(),
-//                 ),
-//                 material: materials.add(Color::GREEN.into()),
-//                 transform: Transform::from_translation(
-//                     (crs.origin + crs.direction * i as f32 / 30.0).into(),
-//                 ),
+//             commands.spawn(PbrBundle {
+//                 mesh: mesh.clone(),
+//                 material: material.clone(),
+//                 transform: Transform::from_translation(axis * i as f32 * 0.05),
 //                 ..default()
 //             });
 //         }

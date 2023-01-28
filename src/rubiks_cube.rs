@@ -112,14 +112,19 @@ impl RubiksCube {
     }
 
     pub fn select_y_layer(&self, y: u32) -> Vec<u32> {
-        (0..self.side_size).rev()
+        (0..self.side_size)
+            .rev()
             .flat_map(|x| (0..self.side_size).map(move |z| self.cube_corrds_to_pos(x, y, z)))
             .collect()
     }
 
     pub fn select_z_layer(&self, z: u32) -> Vec<u32> {
         (0..self.side_size)
-            .flat_map(|y| (0..self.side_size).rev().map(move |x| self.cube_corrds_to_pos(x, y, z)))
+            .flat_map(|y| {
+                (0..self.side_size)
+                    .rev()
+                    .map(move |x| self.cube_corrds_to_pos(x, y, z))
+            })
             .collect()
     }
 }
