@@ -3,12 +3,15 @@ use bevy::{
     prelude::*,
 };
 
+use crate::GameStates;
+
 pub struct CameraControllerPlugin;
 
 impl Plugin for CameraControllerPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(OrbitCameraKeys::default());
-        app.add_system(pan_orbit_camera);
+
+        app.add_system_set(SystemSet::on_update(GameStates::InGame).with_system(pan_orbit_camera));
     }
 }
 
@@ -60,7 +63,9 @@ fn pan_orbit_camera(
         scroll += ev.y;
     }
 
-    if let (Ok((mut pan_orbit, mut transform)), Some(window)) = (query.get_single_mut(), windows.get_primary()) {
+    if let (Ok((mut pan_orbit, mut transform)), Some(window)) =
+        (query.get_single_mut(), windows.get_primary())
+    {
         if rotation_move.length_squared() > 0.0 {
             let delta_x = rotation_move.x / window.width() * std::f32::consts::PI * 2.0;
             let delta_y = rotation_move.y / window.height() * std::f32::consts::PI;
