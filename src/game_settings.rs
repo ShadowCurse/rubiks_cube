@@ -25,7 +25,7 @@ impl Default for GameSettings {
     fn default() -> Self {
         Self {
             mode: WindowMode::Windowed,
-            volume: 5.0,
+            volume: 2.0,
         }
     }
 }

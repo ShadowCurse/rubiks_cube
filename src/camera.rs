@@ -74,8 +74,7 @@ fn pan_orbit_camera(
             transform.rotation = yaw * transform.rotation * pitch;
         } else if scroll.abs() > 0.0 {
             pan_orbit.radius -= scroll * pan_orbit.radius * 0.2;
-            // dont allow zoom to reach zero or you get stuck
-            pan_orbit.radius = f32::max(pan_orbit.radius, 0.05);
+            pan_orbit.radius = pan_orbit.radius.clamp(0.8, 3.0);
         }
 
         let rot_matrix = Mat3::from_quat(transform.rotation);
