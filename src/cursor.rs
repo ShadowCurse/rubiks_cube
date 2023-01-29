@@ -11,8 +11,8 @@ impl Plugin for CursorRayPlugin {
             SystemSet::on_update(GameStates::InGame)
                 .with_system(world_cursor_system)
                 .with_system(cursor_selection_vector)
-                .with_system(selection_vector_colliniar_axis)
-                .with_system(projection_on_collinear_axis),
+                .with_system(selection_vector_colliniar_axis.after(cursor_selection_vector))
+                .with_system(projection_on_collinear_axis.after(selection_vector_colliniar_axis)),
         );
         app.add_system_set(SystemSet::on_exit(GameStates::InGame).with_system(deinit));
     }

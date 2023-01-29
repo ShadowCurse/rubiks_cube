@@ -259,7 +259,6 @@ fn stop_rotation(
     mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
     mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayNormal>,
     mut cursor_collinear_axis: ResMut<CursorCollinearAxis>,
-    mut collinear_axis_projection: ResMut<CollinearAxisProjection>,
     mut rubiks_cube: Query<&mut RubiksCube>,
     mut sub_cubes: Query<(&SubCube, &mut Transform)>,
 ) {
@@ -312,7 +311,6 @@ fn stop_rotation(
         currently_selected_sub_cube.0 = None;
         currently_selected_sub_cube_normal.0 = None;
         cursor_collinear_axis.0 = None;
-        collinear_axis_projection.0 = None;
 
         audio
             .play(game_audio.rotation.clone())
