@@ -7,7 +7,7 @@ use crate::{
     cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay},
     ray_extension::RayExtension,
     rubiks_cube::{Rotation, RubiksCube},
-    ui::GameSettings,
+    game_settings::GameSettings,
     GameStates,
 };
 

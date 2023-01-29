@@ -5,6 +5,7 @@ mod audio;
 mod camera;
 mod cube_material;
 mod cursor;
+mod game_settings;
 mod game_state;
 mod ray_extension;
 mod rubiks_cube;
@@ -15,6 +16,7 @@ use audio::AudioPlugin;
 use camera::{CameraControllerPlugin, OrbitCamera};
 use cube_material::CubeMaterial;
 use cursor::CursorRayPlugin;
+use game_settings::GameSettingsPlugin;
 use game_state::GameStatePlugin;
 use rubiks_cube_plugin::RubiksCubePlugin;
 use ui::UiPlugin;
@@ -37,16 +39,17 @@ fn main() {
     });
 
     app.add_plugins(DefaultPlugins);
-    app.add_plugin(MaterialPlugin::<CubeMaterial>::default());
 
     app.add_state(GameStates::MainMenu);
 
     app.add_plugin(AudioPlugin);
-    app.add_plugin(UiPlugin);
     app.add_plugin(CameraControllerPlugin);
-    app.add_plugin(GameStatePlugin);
+    app.add_plugin(MaterialPlugin::<CubeMaterial>::default());
     app.add_plugin(CursorRayPlugin);
+    app.add_plugin(GameSettingsPlugin);
+    app.add_plugin(GameStatePlugin);
     app.add_plugin(RubiksCubePlugin);
+    app.add_plugin(UiPlugin);
 
     app.add_startup_system(setup);
 

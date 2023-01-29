@@ -4,7 +4,11 @@ use bevy_egui::{
     EguiContext, EguiPlugin,
 };
 
-use crate::{game_state::GameState, GameStates};
+use crate::{
+    game_settings::{GameSettings, GameSettingsEvent},
+    game_state::GameState,
+    GameStates,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UiStates {
@@ -21,27 +25,11 @@ impl Plugin for UiPlugin {
         app.add_plugin(EguiPlugin);
         app.add_state(UiStates::MainMenu);
 
-        app.insert_resource(GameSettings::default());
         app.add_system(game_ui);
 
         app.add_system_set(
             SystemSet::on_update(GameStates::InGame).with_system(game_keyboard_actins),
         );
-    }
-}
-
-#[derive(Debug, Resource)]
-pub struct GameSettings {
-    pub mode: WindowMode,
-    pub volume: f64,
-}
-
-impl Default for GameSettings {
-    fn default() -> Self {
-        Self {
-            mode: WindowMode::Windowed,
-            volume: 5.0,
-        }
     }
 }
 
@@ -58,12 +46,13 @@ fn game_keyboard_actins(
 
 fn game_ui(
     game_state: Res<GameState>,
-    mut windows: ResMut<Windows>,
+    game_settings: Res<GameSettings>,
     mut game_states: ResMut<State<GameStates>>,
     mut ui_states: ResMut<State<UiStates>>,
-    mut game_settings: ResMut<GameSettings>,
     mut egui_context: ResMut<EguiContext>,
     mut exit_event: EventWriter<AppExit>,
+    mut settings_events: EventWriter<GameSettingsEvent>,
+    mut local_settings: Local<GameSettings>,
 ) {
     match ui_states.current() {
         UiStates::MainMenu => show_main_menu(
@@ -74,10 +63,11 @@ fn game_ui(
         ),
         UiStates::InGame => show_in_game(&game_state, &mut egui_context),
         UiStates::Settings => show_settings(
+            &game_settings,
             &mut ui_states,
-            &mut game_settings,
-            &mut windows,
             &mut egui_context,
+            &mut settings_events,
+            &mut local_settings,
         ),
         UiStates::Paused => show_paused(&mut game_states, &mut ui_states, &mut egui_context),
     }
@@ -128,10 +118,11 @@ fn show_in_game(game_state: &Res<GameState>, egui_context: &mut ResMut<EguiConte
 }
 
 fn show_settings(
+    game_settings: &Res<GameSettings>,
     ui_states: &mut ResMut<State<UiStates>>,
-    game_settings: &mut ResMut<GameSettings>,
-    windows: &mut ResMut<Windows>,
     egui_context: &mut ResMut<EguiContext>,
+    settings_events: &mut EventWriter<GameSettingsEvent>,
+    local_settings: &mut Local<GameSettings>,
 ) {
     egui::Window::new("Rubik's Cube")
         .anchor(Align2::CENTER_CENTER, (0.0, 0.0))
@@ -141,7 +132,7 @@ fn show_settings(
             ui.set_width(200.0);
             ui.set_height(200.0);
 
-            let mode = &mut game_settings.mode;
+            let mode = &mut local_settings.mode;
             ComboBox::from_label("WindowMode")
                 .selected_text(format!("{mode:?}"))
                 .show_ui(ui, |ui| {
@@ -149,13 +140,17 @@ fn show_settings(
                     ui.selectable_value(mode, WindowMode::Fullscreen, "Fullscreen");
                 });
 
-            windows.get_primary_mut().unwrap().set_mode(*mode);
+            ui.add(Slider::new(&mut local_settings.volume, 0.0..=10.0).text("Volume"));
 
-            ui.add(Slider::new(&mut game_settings.volume, 0.0..=10.0).text("Volume"));
+            let apply = ui.button("Apply");
+            if apply.clicked() && **local_settings != **game_settings {
+                settings_events.send(GameSettingsEvent::Apply(**local_settings));
+            }
 
             let back = ui.button("Back");
             if back.clicked() {
                 ui_states.pop().unwrap();
+                **local_settings = **game_settings;
             }
         });
 }
