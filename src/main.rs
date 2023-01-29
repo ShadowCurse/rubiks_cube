@@ -1,6 +1,7 @@
 #![feature(is_sorted)]
 use bevy::prelude::*;
 
+mod audio;
 mod camera;
 mod cube_material;
 mod cursor;
@@ -10,6 +11,7 @@ mod rubiks_cube;
 mod rubiks_cube_plugin;
 mod ui;
 
+use audio::AudioPlugin;
 use camera::{CameraControllerPlugin, OrbitCamera};
 use cube_material::CubeMaterial;
 use cursor::CursorRayPlugin;
@@ -39,6 +41,7 @@ fn main() {
 
     app.add_state(GameStates::MainMenu);
 
+    app.add_plugin(AudioPlugin);
     app.add_plugin(UiPlugin);
     app.add_plugin(CameraControllerPlugin);
     app.add_plugin(GameStatePlugin);

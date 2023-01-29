@@ -1,10 +1,13 @@
 use bevy::{prelude::*, render::primitives::Aabb};
+use bevy_kira_audio::{Audio, AudioControl};
 
 use crate::{
+    audio::GameSounds,
     cube_material::CubeMaterial,
     cursor::{CollinearAxisProjection, CursorCollinearAxis, CursorRay},
     ray_extension::RayExtension,
     rubiks_cube::{Rotation, RubiksCube},
+    ui::GameSettings,
     GameStates,
 };
 
@@ -250,6 +253,9 @@ fn rotate_side(
 fn stop_rotation(
     mouse_input: Res<Input<MouseButton>>,
     rotation_angle: Res<RotationAngle>,
+    game_audio: Res<GameSounds>,
+    game_settings: Res<GameSettings>,
+    audio: Res<Audio>,
     mut currently_selected_sub_cube: ResMut<CurrentlySelectedSubCube>,
     mut currently_selected_sub_cube_normal: ResMut<CurrentlySelectedSubCubeRayNormal>,
     mut cursor_collinear_axis: ResMut<CursorCollinearAxis>,
@@ -307,5 +313,9 @@ fn stop_rotation(
         currently_selected_sub_cube_normal.0 = None;
         cursor_collinear_axis.0 = None;
         collinear_axis_projection.0 = None;
+
+        audio
+            .play(game_audio.rotation.clone())
+            .with_volume(game_settings.volume);
     }
 }
