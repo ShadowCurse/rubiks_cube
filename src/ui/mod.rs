@@ -30,17 +30,19 @@ impl Plugin for UiPlugin {
     }
 }
 
-#[derive(Debug, Default, PartialEq)]
-enum ScreenMode {
-    Fullscreen,
-    #[default]
-    Windowed,
+#[derive(Debug, Resource)]
+pub struct GameSettings {
+    pub mode: WindowMode,
+    pub volume: f64,
 }
 
-#[derive(Debug, Default, Resource)]
-struct GameSettings {
-    mode: ScreenMode,
-    volume: f32,
+impl Default for GameSettings {
+    fn default() -> Self {
+        Self {
+            mode: WindowMode::Windowed,
+            volume: 5.0,
+        }
+    }
 }
 
 fn game_keyboard_actins(
@@ -56,6 +58,7 @@ fn game_keyboard_actins(
 
 fn game_ui(
     game_state: Res<GameState>,
+    mut windows: ResMut<Windows>,
     mut game_states: ResMut<State<GameStates>>,
     mut ui_states: ResMut<State<UiStates>>,
     mut game_settings: ResMut<GameSettings>,
@@ -70,7 +73,12 @@ fn game_ui(
             &mut exit_event,
         ),
         UiStates::InGame => show_in_game(&game_state, &mut egui_context),
-        UiStates::Settings => show_settings(&mut ui_states, &mut game_settings, &mut egui_context),
+        UiStates::Settings => show_settings(
+            &mut ui_states,
+            &mut game_settings,
+            &mut windows,
+            &mut egui_context,
+        ),
         UiStates::Paused => show_paused(&mut game_states, &mut ui_states, &mut egui_context),
     }
 }
@@ -122,6 +130,7 @@ fn show_in_game(game_state: &Res<GameState>, egui_context: &mut ResMut<EguiConte
 fn show_settings(
     ui_states: &mut ResMut<State<UiStates>>,
     game_settings: &mut ResMut<GameSettings>,
+    windows: &mut ResMut<Windows>,
     egui_context: &mut ResMut<EguiContext>,
 ) {
     egui::Window::new("Rubik's Cube")
@@ -136,9 +145,11 @@ fn show_settings(
             ComboBox::from_label("WindowMode")
                 .selected_text(format!("{mode:?}"))
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(mode, ScreenMode::Windowed, "Windowed");
-                    ui.selectable_value(mode, ScreenMode::Fullscreen, "Fullscreen");
+                    ui.selectable_value(mode, WindowMode::Windowed, "Windowed");
+                    ui.selectable_value(mode, WindowMode::Fullscreen, "Fullscreen");
                 });
+
+            windows.get_primary_mut().unwrap().set_mode(*mode);
 
             ui.add(Slider::new(&mut game_settings.volume, 0.0..=10.0).text("Volume"));
 
