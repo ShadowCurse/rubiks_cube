@@ -291,16 +291,10 @@ fn stop_rotation(
                     .expect("Subcubes in rubiks cube should be in the query");
                 let rotation = if rotation_axis == Vec3::X {
                     Quat::from_rotation_x(angle)
-                } else if rotation_axis == Vec3::NEG_X {
-                    Quat::from_rotation_x(-angle)
                 } else if rotation_axis == Vec3::Y {
                     Quat::from_rotation_y(angle)
-                } else if rotation_axis == Vec3::NEG_Y {
-                    Quat::from_rotation_y(-angle)
                 } else if rotation_axis == Vec3::Z {
                     Quat::from_rotation_z(angle)
-                } else if rotation_axis == Vec3::NEG_Z {
-                    Quat::from_rotation_z(-angle)
                 } else {
                     println!("Got weired rotation axis: {rotation_axis}");
                     return;
